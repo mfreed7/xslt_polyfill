@@ -1,3 +1,9 @@
 [submodule "src/xslt-processor"]
 	path = src/xslt-processor
 	url = https://github.com/DesignLiquido/xslt-processor.git
+[submodule "src/libxslt"]
+	path = src/libxslt
+	url = https://github.com/GNOME/libxslt.git
+[submodule "src/libxml2"]
+	path = src/libxml2
+	url = https://github.com/GNOME/libxml2
