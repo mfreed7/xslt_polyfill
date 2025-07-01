@@ -11,42 +11,67 @@
 //   https://github.com/DesignLiquido/xslt-processor/tree/main
 // Please see its copyright terms in src/xslt-processor/LICENSE.
 
-import './xslt-processor.js'
-
-(function() {  
+(function() {
   // Feature detection
   if (window.xsltPolyfillInstalled) {
     return;
   }
   window.xsltPolyfillInstalled = true;
+  let polyfillReadyPromiseResolve;
+  let polyfillReadyPromiseReject;
+  const polyfillReadyPromise = new Promise((resolve,reject) => {
+    polyfillReadyPromiseResolve = resolve;
+    polyfillReadyPromiseReject = reject;
+  });
   window.xsltUsePolyfillAlways = ('xsltUsePolyfillAlways' in window) ? window.xsltUsePolyfillAlways : true;
   const nativeSupported = 'XSLTProcessor' in window;
   if (nativeSupported && !window.xsltUsePolyfillAlways) {
+    polyfillReadyPromiseReject('Native feature supported');
     return;
   }
 
-  function ParseXMLWithXSLT(xmlParser, xslt, sourceXML, sourceXSLT) {
-    return xslt.xsltProcess(
-      xmlParser.xmlParse(sourceXML),
-      xmlParser.xmlParse(sourceXSLT).firstChild
-    );
+  const promiseName = 'xsltPolyfillReady';
+
+  // Initialize the WASM module, first thing.
+  let wasm_transform = null;
+  let wasm_free = null;
+  createXSLTTransformModule().then(Module => {
+      // Wrap the C function 'transform' for easy calling from JavaScript.
+      // 'cwrap' handles the conversion of JS strings to C strings (char*)
+      // and the return type.
+      wasm_transform = Module.cwrap(
+        'transform', // C function name
+        'string',    // Return type
+        ['string', 'string'] // Argument types
+      );
+
+      // Get a reference to the C 'free' function to release memory.
+      wasm_free = Module._free;
+      // Tell people we're ready.
+      polyfillReadyPromiseResolve();
+      console.log('XSLT WASM Module Loaded');
+  });
+
+  function transformXmlWithXslt(xmlContent, xsltContent) {
+    if (!wasm_transform) {
+      throw new Error(`Polyfill XSLT WASM module not yet loaded. Please wait for the ${promiseName} promise to resolve.`);
+    }
+    const resultString = wasm_transform(xmlContent, xsltContent);
+    if (!resultString) {
+      throw new Error("Transformation failed. Check browser console for errors.");
+    }
+    // The C code used malloc (via libxml2's allocator) to create the result
+    // string. We are not freeing the memory here because cwrap with a
+    // 'string' return type automatically copies the string out of the WASM
+    // heap into a JS string and frees the WASM memory for us.
+    return resultString;
   }
 
   class XSLTProcessor {
     #stylesheetText;
-    #xslt;
-    #xmlParser;
 
-    constructor() { 
+    constructor() {
       this.#stylesheetText = null;
-      this.#xmlParser = new globalThis.XsltProcessor.XmlParser();
-      const options = {
-        cData: true,
-        escape: false,
-        selfClosingTags: false,
-        outputMethod: 'html',
-      };
-      this.#xslt = new globalThis.XsltProcessor.Xslt(options);
     }
     isPolyfill() {
       return true;
@@ -58,7 +83,7 @@ import './xslt-processor.js'
 
     transformToFragment(source, document) {
       const sourceXml = (new XMLSerializer()).serializeToString(source);
-      const output = ParseXMLWithXSLT(this.#xmlParser, this.#xslt, sourceXml, this.#stylesheetText);
+      const output = transformXmlWithXslt(sourceXml, this.#stylesheetText);
       // Eventually need to grab the output type, instead of assuming html:
       const doc = (new DOMParser()).parseFromString(output, 'text/html');
       const fragment = document.createDocumentFragment();
@@ -132,23 +157,25 @@ import './xslt-processor.js'
     }
     const xsltText = await xsltResponse.text();
 
-    // Process XML/XSLT with ParseXMLWithXSLT and replace the document.
-    const xmlParser = new globalThis.XsltProcessor.XmlParser();
-    const xslt = new globalThis.XsltProcessor.Xslt();
+    // Process XML/XSLT and replace the document.
     let resultHtml;
     try {
-      resultHtml = ParseXMLWithXSLT(xmlParser, xslt, xmlText, xsltText);
+      resultHtml = transformXmlWithXslt(xmlText, xsltText);
     } catch (e) {
       return replaceDoc(`Error processing XML/XSLT: ${e}`);
     }
     // Replace the document with the result
     replaceDoc(resultHtml);
   }
+  function xsltPolyfillReady() {
+    return polyfillReadyPromise;
+  }
 
   // Initialize
   function init() {
     window.XSLTProcessor = XSLTProcessor;
     window.loadXmlWithXslt = loadXmlWithXslt;
+    window.xsltPolyfillReady = xsltPolyfillReady;
     console.log(`XSLT polyfill installed (native supported: ${nativeSupported}).`);
   }
   init();
