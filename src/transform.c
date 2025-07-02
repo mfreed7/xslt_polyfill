@@ -10,19 +10,29 @@
 #include <libxslt/xslt.h>
 #include <libxslt/xsltutils.h>
 #include <libxslt/transform.h>
+#include <libxml/catalog.h>
 
 /**
- * @brief Performs an XSLT transformation.
- * * This function is exported to JavaScript. It takes XML and XSLT content as strings,
- * performs the transformation, and returns the result as a string.
- * The caller in JavaScript is responsible for freeing the returned string's memory
- * by calling the exported `_free` function.
- * * @param xml_content A string containing the source XML document.
- * @param xslt_content A string containing the XSLT stylesheet document.
- * @return A pointer to a string with the transformation result, or NULL on error.
+ * @brief Transforms an XML string using an XSLT string.
+ *
+ * This function is exposed to JavaScript. It takes two strings, parses them
+ * as XML and XSLT documents, performs the transformation, and returns the
+ * result as a string.
+ *
+ * IMPORTANT: The returned string is allocated in the WASM module's memory
+ * and must be freed from the JavaScript side by calling `_free()`.
+ *
+ * @param xml_content A string containing the source XML document.
+ * @param xslt_content A string containing the XSLT stylesheet.
+ * @return A pointer to a new string containing the transformed document, or NULL on error.
  */
 EMSCRIPTEN_KEEPALIVE
 char* transform(const char* xml_content, const char* xslt_content) {
+    // --- FIX: Disable automatic catalog loading ---
+    // This prevents libxml2 from trying to use getenv(), which causes a crash
+    // in the sandboxed WASM environment. This must be the first libxml call.
+    xmlCatalogSetDefaults(XML_CATA_ALLOW_NONE);
+
     // Initialize the XML library. This is important for thread safety.
     xmlInitParser();
 
@@ -46,12 +56,12 @@ char* transform(const char* xml_content, const char* xslt_content) {
     xmlDocPtr result_doc = xsltApplyStylesheet(xslt_sheet, xml_doc, NULL);
     if (result_doc == NULL) {
         fprintf(stderr, "Error: could not apply stylesheet.\n");
-        xsltFreeStylesheet(xslt_sheet);
         xmlFreeDoc(xml_doc);
+        xsltFreeStylesheet(xslt_sheet);
         return NULL;
     }
 
-    // Save the result to a string
+    // Serialize the result document to a string
     xmlChar* result_string = NULL;
     int result_len = 0;
     xsltSaveResultToString(&result_string, &result_len, result_doc, xslt_sheet);

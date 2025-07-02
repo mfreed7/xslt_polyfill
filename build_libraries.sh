@@ -15,13 +15,18 @@ mkdir -p "${BUILD_DIR}"
 
 # --- Build libxml2 ---
 cd "${BASE_DIR}/src/libxml2"
+export NOCONFIGURE=1 # We'll run it with emconfigure instead
 ./autogen.sh
 
 # Configure with Emscripten's emconfigure wrapper
 emconfigure ./configure \
     --host=wasm32-unknown-emscripten \
     --prefix="${XML2_INSTALL_DIR}" \
+    --with-catalog \
+    --without-http \
+    --without-ftp \
     --without-python \
+    --without-iconv \
     --without-zlib \
     --without-lzma \
     --disable-shared \

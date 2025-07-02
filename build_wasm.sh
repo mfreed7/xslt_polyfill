@@ -30,7 +30,7 @@ LIBS=$(pkg-config --libs libxml-2.0 libxslt)
 # echo "Found CFLAGS: ${CFLAGS}"
 # echo "Found LIBS: ${LIBS}"
 
-emcc -O1 -g4 \
+emcc -O1 -gsource-map \
   src/transform.c \
   -o ${OUT_FILE} \
   ${CFLAGS} \
