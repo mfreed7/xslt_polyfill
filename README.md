@@ -26,7 +26,7 @@ You can convert it to use this polyfill by generating a new HTML file like this:
 ```html
 <!DOCTYPE html>
 
-<script src="xslt-polyfill.js"></script>
+<script src="xslt-polyfill.min.js"></script>
 <script>
   window.loadXmlWithXsltWhenReady('./demo.xml');
 </script>
@@ -34,6 +34,12 @@ You can convert it to use this polyfill by generating a new HTML file like this:
 
 This will load the XML file, look for an XML stylesheet, process it with this
 XSLT polyfill, and replace the page with the result of the transformation.
+
+## Demos
+
+There are a few demos in the `test/` directory, both the XML/XSL source files
+and the corresponding `.html` files that use the polyfill to load and process
+the XSLT.
 
 ## Building
 

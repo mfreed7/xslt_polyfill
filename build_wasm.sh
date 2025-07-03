@@ -8,7 +8,7 @@ BASE_DIR=$(pwd)
 BUILD_DIR="${BASE_DIR}/dist"
 XML2_INSTALL_DIR="${BUILD_DIR}/libxml2-install"
 XSLT_INSTALL_DIR="${BUILD_DIR}/libxslt-install"
-OUT_FILE="${BUILD_DIR}/xslt_wasm.js"
+OUT_FILE="${BUILD_DIR}/xslt-wasm.js"
 
 # --- Set PKG_CONFIG_PATH for emscripten ---
 # This tells pkg-config where to find the .pc files for our compiled libs

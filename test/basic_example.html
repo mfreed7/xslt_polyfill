@@ -33,7 +33,7 @@ window.onload = async () => {
   const xmlDoc = parser.parseFromString(xmlString, "application/xml");
   const xsltDoc = parser.parseFromString(xsltString, "application/xml");
 
-  await loadXsltPolyfill('../src/xslt-polyfill.js', /*force*/true);
+  await forceLoadXsltPolyfill('../src/xslt-polyfill.js');
 
   // This should use the polyfill:
   const xsltProcessor = new XSLTProcessor();
