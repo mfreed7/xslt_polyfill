@@ -42,13 +42,15 @@ and the corresponding `.html` files that use the polyfill to load and process
 the XSLT. In particular:
 
 - `basic_example.html`: a test of the `XSLTProcessor` polyfill, which offers
-  JS-based XSLT processing.
+  JS-based XSLT processing. \[[Run](https://mfreed7.github.io/xslt_polyfill/test/basic_example.html)\]
 - `demo.html`: a polyfill "replacement" of an XML document, `demo.xml`. This
   example uses the `loadXmlWithXsltWhenReady()` function to load `demo.xml`,
   find its contained XSL processing instruction pointing to `demo.xsl`, load
   that file, and then process them together, replacing the document.
+  \[[Run](https://mfreed7.github.io/xslt_polyfill/test/demo.html)\]
 - `demo_large.html`: a much larger example, taken from a public site, which
   does the same as `demo.html`, but with a more complex/realistic document.
+  \[[Run](https://mfreed7.github.io/xslt_polyfill/test/demo_large.html)\]
 
 ## Building
 
