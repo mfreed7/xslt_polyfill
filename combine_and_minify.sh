@@ -10,7 +10,7 @@ MINIFIED_FILE="${BUILD_DIR}/xslt-polyfill-complete.min.js"
 OUTPUT_FILE="${BUILD_DIR}/xslt-polyfill.min.js"
 
 # Concatenate the polyfill and the WASM output
-cat "${BUILD_DIR}/xslt-wasm.js" "${BASE_DIR}/src/xslt-polyfill.js" > "${COMBINED_FILE}"
+cat "${BUILD_DIR}/xslt-wasm.js" "${BASE_DIR}/src/xslt-polyfill-src.js" > "${COMBINED_FILE}"
 
 # Minify the combined file
 terser "${COMBINED_FILE}" --compress --mangle --output "${MINIFIED_FILE}"
