@@ -6,4 +6,5 @@ async function forceLoadXsltPolyfill(pathToPolyfill) {
   const loaded = new Promise(resolve => script.addEventListener('load', resolve));
   document.head.appendChild(script);
   await loaded;
+  await window.xsltPolyfillReady();
 }

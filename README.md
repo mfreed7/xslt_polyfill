@@ -39,7 +39,16 @@ XSLT polyfill, and replace the page with the result of the transformation.
 
 There are a few demos in the `test/` directory, both the XML/XSL source files
 and the corresponding `.html` files that use the polyfill to load and process
-the XSLT.
+the XSLT. In particular:
+
+- `basic_example.html`: a test of the `XSLTProcessor` polyfill, which offers
+  JS-based XSLT processing.
+- `demo.html`: a polyfill "replacement" of an XML document, `demo.xml`. This
+  example uses the `loadXmlWithXsltWhenReady()` function to load `demo.xml`,
+  find its contained XSL processing instruction pointing to `demo.xsl`, load
+  that file, and then process them together, replacing the document.
+- `demo_large.html`: a much larger example, taken from a public site, which
+  does the same as `demo.html`, but with a more complex/realistic document.
 
 ## Building
 
@@ -49,3 +58,10 @@ polyfill can be built with one command:
 ```
 $ ./build.sh
 ```
+
+## Improvements / Bugs
+
+If you find issues with the polyfill, feel free to file them [here](https://github.com/mfreed7/xslt_polyfill/issues).
+Even better, if you would like to contribute to this polyfill,
+I'm happy to review [pull requests](https://github.com/mfreed7/xslt_polyfill/pulls).
+Thanks in advance!
