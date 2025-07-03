@@ -173,12 +173,16 @@
   function xsltPolyfillReady() {
     return polyfillReadyPromise;
   }
+  function loadXmlWithXsltWhenReady(url) {
+    xsltPolyfillReady().then(() => loadXmlWithXslt(url));
+  }
 
   // Initialize
   function init() {
     window.XSLTProcessor = XSLTProcessor;
     window.loadXmlWithXslt = loadXmlWithXslt;
     window.xsltPolyfillReady = xsltPolyfillReady;
+    window.loadXmlWithXsltWhenReady = loadXmlWithXsltWhenReady;
     console.log(`XSLT polyfill installed (native supported: ${nativeSupported}).`);
   }
   init();

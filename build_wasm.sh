@@ -5,7 +5,7 @@ set -e
 
 # --- Define Paths ---
 BASE_DIR=$(pwd)
-BUILD_DIR="${BASE_DIR}/build"
+BUILD_DIR="${BASE_DIR}/dist"
 XML2_INSTALL_DIR="${BUILD_DIR}/libxml2-install"
 XSLT_INSTALL_DIR="${BUILD_DIR}/libxslt-install"
 OUT_FILE="${BUILD_DIR}/xslt_wasm.js"
@@ -17,7 +17,7 @@ export PKG_CONFIG_PATH="${XML2_INSTALL_DIR}/lib/pkgconfig:${XSLT_INSTALL_DIR}/li
 # --- Verify that pkg-config can find the libraries ---
 if ! pkg-config --exists libxml-2.0 || ! pkg-config --exists libxslt; then
     echo "Error: pkg-config could not find libxml-2.0 or libxslt." >&2
-    echo "This means the libraries were not built and installed correctly into the ./build directory." >&2
+    echo "This means the libraries were not built and installed correctly into the output directory." >&2
     echo "PKG_CONFIG_PATH is: ${PKG_CONFIG_PATH}" >&2
     exit 1
 fi

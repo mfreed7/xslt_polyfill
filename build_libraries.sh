@@ -5,7 +5,7 @@ set -e
 
 # Define absolute paths for our build directories
 BASE_DIR=$(pwd)
-BUILD_DIR="${BASE_DIR}/build"
+BUILD_DIR="${BASE_DIR}/dist"
 XML2_INSTALL_DIR="${BUILD_DIR}/libxml2-install"
 XSLT_INSTALL_DIR="${BUILD_DIR}/libxslt-install"
 
