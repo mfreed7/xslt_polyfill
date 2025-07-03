@@ -27,9 +27,6 @@ fi
 CFLAGS=$(pkg-config --cflags libxml-2.0 libxslt)
 LIBS=$(pkg-config --libs libxml-2.0 libxslt)
 
-# echo "Found CFLAGS: ${CFLAGS}"
-# echo "Found LIBS: ${LIBS}"
-
 emcc -O1 -gsource-map \
   src/transform.c \
   -o ${OUT_FILE} \
@@ -40,14 +37,12 @@ emcc -O1 -gsource-map \
   -s ALLOW_MEMORY_GROWTH=1 \
   -s SAFE_HEAP=1 \
   -s ASSERTIONS=1 \
+  -s INITIAL_MEMORY=134217728 \
+  -s STACK_SIZE=5242880 \
   -s EXPORT_NAME="'createXSLTTransformModule'" \
   -s EXPORTED_FUNCTIONS="['_transform', '_malloc', '_free']" \
   -s EXPORTED_RUNTIME_METHODS="['cwrap', 'UTF8ToString']" \
   ${LIBS}
 
-#   # -s SAFE_HEAP=1 \
-#   # -s ASSERTIONS=1 \
-#   # -s INITIAL_MEMORY=134217728 \
-#   # -s STACK_SIZE=5242880 \
 
 echo "--- ${OUT_FILE} (embedded WASM) ---"

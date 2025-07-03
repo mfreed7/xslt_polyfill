@@ -1,0 +1,11 @@
+<!DOCTYPE html>
+
+
+<!-- Eventually include this directly into the polyfill JS -->
+<script src="../build/xslt_wasm.js"></script>
+
+
+<script src="../src/xslt-polyfill.js"></script>
+<script>
+window.xsltPolyfillReady().then(() => loadXmlWithXslt('./demo.xml'));
+</script>
