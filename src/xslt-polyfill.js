@@ -47,6 +47,7 @@
 
       // Get a reference to the C 'free' function to release memory.
       wasm_free = Module._free;
+
       // Tell people we're ready.
       polyfillReadyPromiseResolve();
       console.log('XSLT WASM Module Loaded');
@@ -58,8 +59,10 @@
     }
     const resultString = wasm_transform(xmlContent, xsltContent);
     if (!resultString) {
-      throw new Error("Transformation failed. Check browser console for errors.");
+        // If the result is null, an error occurred.
+        throw new Error(`XSLT Transformation failed: see console errors`);
     }
+
     // The C code used malloc (via libxml2's allocator) to create the result
     // string. We are not freeing the memory here because cwrap with a
     // 'string' return type automatically copies the string out of the WASM

@@ -28,11 +28,6 @@
  */
 EMSCRIPTEN_KEEPALIVE
 char* transform(const char* xml_content, const char* xslt_content) {
-    // --- FIX: Disable automatic catalog loading ---
-    // This prevents libxml2 from trying to use getenv(), which causes a crash
-    // in the sandboxed WASM environment. This must be the first libxml call.
-    xmlCatalogSetDefaults(XML_CATA_ALLOW_NONE);
-
     // Initialize the XML library. This is important for thread safety.
     xmlInitParser();
 
@@ -68,8 +63,8 @@ char* transform(const char* xml_content, const char* xslt_content) {
 
     // Clean up all the allocated resources
     xmlFreeDoc(result_doc);
-    xsltFreeStylesheet(xslt_sheet);
     xmlFreeDoc(xml_doc);
+    xsltFreeStylesheet(xslt_sheet);
 
     // Clean up the parser variables.
     xsltCleanupGlobals();
