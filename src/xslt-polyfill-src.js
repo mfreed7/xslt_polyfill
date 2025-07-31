@@ -26,7 +26,7 @@
   window.xsltUsePolyfillAlways = ('xsltUsePolyfillAlways' in window) ? window.xsltUsePolyfillAlways : false;
   const nativeSupported = 'XSLTProcessor' in window;
   if (nativeSupported && !window.xsltUsePolyfillAlways) {
-    polyfillReadyPromiseReject('Native feature supported');
+    console.log('Native feature supported - XSLT polyfill not loaded');
     return;
   }
 
