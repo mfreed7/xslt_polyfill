@@ -23,7 +23,7 @@
     polyfillReadyPromiseResolve = resolve;
     polyfillReadyPromiseReject = reject;
   });
-  window.xsltUsePolyfillAlways = ('xsltUsePolyfillAlways' in window) ? window.xsltUsePolyfillAlways : true;
+  window.xsltUsePolyfillAlways = ('xsltUsePolyfillAlways' in window) ? window.xsltUsePolyfillAlways : false;
   const nativeSupported = 'XSLTProcessor' in window;
   if (nativeSupported && !window.xsltUsePolyfillAlways) {
     polyfillReadyPromiseReject('Native feature supported');

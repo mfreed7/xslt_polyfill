@@ -1,8 +1,11 @@
 <!DOCTYPE html>
 
-<script src="../xslt-polyfill.min.js" type="module"></script>
+<script src="../src/utils.js"></script>
 
 <div id="results"></div>
+
+<!-- This is a demo of the polyfill of XSLTProcessor, which force-loads the
+     polyfill even in browsers that natively support XSLT. -->
 
 <script>
 window.onload = async () => {
@@ -32,8 +35,18 @@ window.onload = async () => {
   const xmlDoc = parser.parseFromString(xmlString, "application/xml");
   const xsltDoc = parser.parseFromString(xsltString, "application/xml");
 
+  // This loads the polyfill and forces it to run, even if natively supported:
+  await forceLoadXsltPolyfill('../xslt-polyfill.min.js');
+
+  // This should use the polyfill:
   const xsltProcessor = new XSLTProcessor();
+  if (!xsltProcessor.isPolyfill()) {
+    throw Error('Polyfill didn\'t load');
+  }
   xsltProcessor.importStylesheet(xsltDoc);
-  document.getElementById("results").append(xsltProcessor.transformToFragment(xmlDoc, document));
+  const resultFragment = xsltProcessor.transformToFragment(xmlDoc, document);
+
+  // Insert the result into the page
+  document.getElementById("results").append(resultFragment);
 };
 </script>
