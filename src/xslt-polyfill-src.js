@@ -30,25 +30,6 @@
     // The polyfill
     const promiseName = 'xsltPolyfillReady';
 
-    // Initialize the WASM module, first thing.
-    let WasmModule = null;
-    let wasm_transform = null;
-    let wasm_free = null;
-
-    createXSLTTransformModule().then(Module => {
-        WasmModule = Module;
-        // Get a direct reference to the exported C functions.
-        wasm_transform = Module._transform;
-        wasm_free = Module._free;
-
-        // Tell people we're ready.
-        polyfillReadyPromiseResolve();
-        console.log('XSLT WASM Module Loaded');
-    }).catch(err => {
-        console.error("Error loading XSLT WASM module:", err);
-        polyfillReadyPromiseReject(err);
-    });
-
     /**
      * Manages memory to call the WASM transform function using standard Web APIs
      * instead of relying on non-standard Emscripten runtime methods.
@@ -218,6 +199,29 @@
     function xsltPolyfillReady() {
       return polyfillReadyPromise;
     }
+
+    window.XSLTProcessor = XSLTProcessor;
+    window.xsltPolyfillReady = xsltPolyfillReady;
+
+    // Finally, initialize the WASM module.
+    let WasmModule = null;
+    let wasm_transform = null;
+    let wasm_free = null;
+
+    createXSLTTransformModule()
+    .then(Module => {
+        WasmModule = Module;
+        // Get a direct reference to the exported C functions.
+        wasm_transform = Module._transform;
+        wasm_free = Module._free;
+
+        // Tell people we're ready.
+        polyfillReadyPromiseResolve();
+        console.log('XSLT WASM Module Loaded');
+    }).catch(err => {
+        console.error("Error loading XSLT WASM module:", err);
+        polyfillReadyPromiseReject(err);
+    });
   } // if (polyfillWillLoad)
 
   // Utility functions that get exported even if native XSLT is supported:
@@ -227,20 +231,11 @@
     if (text instanceof DocumentFragment) {
       document.body.replaceChildren(text);
     } else {
-      document.open();
-      document.write(text);
-      document.close();
+      document.documentElement.innerHTML = text;
     }
   }
 
-  async function loadXmlWithXslt(path) {
-    // Fetch the XML file from provided path.
-    const xmlResponse = await fetch(path);
-    if (!xmlResponse.ok) {
-      return replaceDoc(`Failed to fetch XML file: ${xmlResponse.statusText}`);
-    }
-    const xmlText = await xmlResponse.text();
-
+  async function loadXmlWithXsltFromContent(xmlText, xmlUrl) {
     // Look inside XML file for a processing instruction with an XSLT file.
     const parser = new DOMParser();
     const xmlDoc = parser.parseFromString(xmlText, "application/xml");
@@ -267,7 +262,7 @@
     }
 
     // Fetch the XSLT file, resolving its path relative to the XML file's URL.
-    const xsltUrl = new URL(xsltPath, xmlResponse.url);
+    const xsltUrl = new URL(xsltPath, xmlUrl);
     const xsltResponse = await fetch(xsltUrl.href);
     if (!xsltResponse.ok) {
       return replaceDoc(`Failed to fetch XSLT file: ${xsltResponse.statusText}`);
@@ -290,23 +285,34 @@
     // Replace the document with the result
     replaceDoc(resultHtml);
   }
-  function loadXmlWithXsltWhenReady(url) {
+  async function loadXmlWithXsltFromUrl(url) {
+    // Fetch the XML file from provided url.
+    const xmlResponse = await fetch(url);
+    if (!xmlResponse.ok) {
+      return replaceDoc(`Failed to fetch XML file: ${xmlResponse.statusText}`);
+    }
+    const xmlText = await xmlResponse.text();
+    return loadXmlWithXsltFromContent(xmlText, url);
+  }
+
+  function loadXmlUrlWithXsltWhenReady(url) {
     if (polyfillWillLoad) {
-      xsltPolyfillReady().then(() => loadXmlWithXslt(url));
+      xsltPolyfillReady().then(() => loadXmlWithXsltFromUrl(url));
     } else {
-      loadXmlWithXslt(url);
+      loadXmlWithXsltFromUrl(url);
+    }
+  }
+  function loadXmlContentWithXsltWhenReady(xmlContent, xmlUrl) {
+    if (polyfillWillLoad) {
+      xsltPolyfillReady().then(() => loadXmlWithXsltFromContent(xmlContent, xmlUrl));
+    } else {
+      loadXmlWithXsltFromContent(xmlContent, xmlUrl);
     }
   }
 
-  // Initialize
-  function init() {
-    if (polyfillWillLoad) {
-      window.XSLTProcessor = XSLTProcessor;
-      window.loadXmlWithXslt = loadXmlWithXslt;
-      window.xsltPolyfillReady = xsltPolyfillReady;
-    }
-    window.loadXmlWithXsltWhenReady = loadXmlWithXsltWhenReady;
-    console.log(`XSLT polyfill ${!polyfillWillLoad ? "NOT " : ""}installed (native supported: ${nativeSupported}).`);
-  }
-  init();
+  window.loadXmlWithXsltFromUrl = loadXmlWithXsltFromUrl;
+  window.loadXmlWithXsltFromContent = loadXmlWithXsltFromContent;
+  window.loadXmlUrlWithXsltWhenReady = loadXmlUrlWithXsltWhenReady;
+  window.loadXmlContentWithXsltWhenReady = loadXmlContentWithXsltWhenReady;
+  console.log(`XSLT polyfill ${!polyfillWillLoad ? "NOT " : ""}installed (native supported: ${nativeSupported}).`);
 })();
