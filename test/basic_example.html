@@ -6,7 +6,7 @@
 <div id="results"></div>
 
 <script>
-window.onload = async () => {
+xsltPolyfillReady().then(() => {
   const xmlString = `
   <page>
    <message>
@@ -36,5 +36,5 @@ window.onload = async () => {
   const xsltProcessor = new XSLTProcessor();
   xsltProcessor.importStylesheet(xsltDoc);
   document.getElementById("results").append(xsltProcessor.transformToFragment(xmlDoc, document));
-};
+});
 </script>

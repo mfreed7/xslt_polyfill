@@ -236,6 +236,7 @@
   }
 
   async function loadXmlWithXsltFromContent(xmlText, xmlUrl) {
+    xmlUrl = absoluteUrl(xmlUrl);
     // Look inside XML file for a processing instruction with an XSLT file.
     const parser = new DOMParser();
     const xmlDoc = parser.parseFromString(xmlText, "application/xml");
@@ -285,8 +286,12 @@
     // Replace the document with the result
     replaceDoc(resultHtml);
   }
+  function absoluteUrl(url) {
+    return new URL(url, window.location.href).href;
+  }
   async function loadXmlWithXsltFromUrl(url) {
     // Fetch the XML file from provided url.
+    url = absoluteUrl(url);
     const xmlResponse = await fetch(url);
     if (!xmlResponse.ok) {
       return replaceDoc(`Failed to fetch XML file: ${xmlResponse.statusText}`);
