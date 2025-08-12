@@ -302,16 +302,16 @@
 
   function loadXmlUrlWithXsltWhenReady(url) {
     if (polyfillWillLoad) {
-      xsltPolyfillReady().then(() => loadXmlWithXsltFromUrl(url));
+      return xsltPolyfillReady().then(() => loadXmlWithXsltFromUrl(url));
     } else {
-      loadXmlWithXsltFromUrl(url);
+      return loadXmlWithXsltFromUrl(url);
     }
   }
   function loadXmlContentWithXsltWhenReady(xmlContent, xmlUrl) {
     if (polyfillWillLoad) {
-      xsltPolyfillReady().then(() => loadXmlWithXsltFromContent(xmlContent, xmlUrl));
+      return xsltPolyfillReady().then(() => loadXmlWithXsltFromContent(xmlContent, xmlUrl));
     } else {
-      loadXmlWithXsltFromContent(xmlContent, xmlUrl);
+      return loadXmlWithXsltFromContent(xmlContent, xmlUrl);
     }
   }
 
