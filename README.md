@@ -28,7 +28,7 @@ You can convert it to use this polyfill by generating a new HTML file like this:
 
 <script src="xslt-polyfill.min.js"></script>
 <script>
-  window.loadXmlWithXsltWhenReady('./demo.xml');
+  window.loadXmlUrlWithXsltWhenReady('./demo.xml');
 </script>
 ```
 
@@ -45,7 +45,7 @@ the XSLT. In particular:
   JS-based XSLT processing.
   \[[Run](https://mfreed7.github.io/xslt_polyfill/test/basic_example.html)\]
 - `demo.html`: a polyfill "replacement" of an XML document, `demo.xml`. This
-  example uses the `loadXmlWithXsltWhenReady()` function to load `demo.xml`,
+  example uses the `loadXmlUrlWithXsltWhenReady()` function to load `demo.xml`,
   find its contained XSL processing instruction pointing to `demo.xsl`, load
   that file, and then process them together, replacing the document.
   \[[Run](https://mfreed7.github.io/xslt_polyfill/test/demo.html)\]
@@ -70,3 +70,11 @@ If you find issues with the polyfill, feel free to file them [here](https://gith
 Even better, if you would like to contribute to this polyfill,
 I'm happy to review [pull requests](https://github.com/mfreed7/xslt_polyfill/pulls).
 Thanks in advance!
+
+## Other Places
+
+This polyfill is also published on npm:
+
+- https://www.npmjs.com/package/xslt-polyfill
+
+A Chrome extension is also in the works, which will automatically load the polyfill on all raw XML documents.
