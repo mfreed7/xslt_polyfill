@@ -77,4 +77,7 @@ This polyfill is also published on npm:
 
 - https://www.npmjs.com/package/xslt-polyfill
 
-A Chrome extension is also in the works, which will automatically load the polyfill on all raw XML documents.
+It is also incorporated into a Chrome extension, which automatically applies the polyfill to raw XML files that contain XSLT stylesheets:
+
+https://chromewebstore.google.com/detail/xslt-polyfill/hlahhpnhgficldhfioiafojgdhcppklm?authuser=0&hl=en
+
