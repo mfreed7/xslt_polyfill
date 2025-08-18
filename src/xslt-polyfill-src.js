@@ -259,7 +259,7 @@
     }
 
     if (!xsltPath) {
-      return replaceDoc(`No XSLT processing instruction found in ${path}`);
+      return replaceDoc(`No XSLT processing instruction found in ${xmlUrl}`);
     }
 
     // Fetch the XSLT file, resolving its path relative to the XML file's URL.
