@@ -249,10 +249,10 @@
     for (const node of xmlDoc.childNodes) {
       if (node.nodeType === Node.PROCESSING_INSTRUCTION_NODE && node.target === 'xml-stylesheet') {
         const data = node.data;
-        const hrefMatch = data.match(/href="([^"]+)"/);
-        const typeMatch = data.match(/type="([^"]+)"/);
-        if (hrefMatch?.[1] && typeMatch && (typeMatch[1] === 'text/xsl' || typeMatch[1] === 'application/xslt+xml')) {
-          xsltPath = hrefMatch[1];
+        const hrefMatch = data.match(/href\s*=\s*(["'])(.*?)\1/)?.[2];
+        const typeMatch = data.match(/type\s*=\s*(["'])(.*?)\1/)?.[2]?.toLowerCase();
+        if (hrefMatch && (typeMatch === 'text/xsl' || typeMatch === 'application/xslt+xml')) {
+          xsltPath = hrefMatch;
           break;
         }
       }
