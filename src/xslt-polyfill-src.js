@@ -115,7 +115,7 @@
           const resultPtr = wasm_transform(xmlPtr, xsltPtr, paramsPtr);
 
           if (!resultPtr) {
-              throw new Error(`XSLT Transformation failed: check console for errors from the WASM module.`);
+              throw new Error(`XSLT Transformation failed`);
           }
 
           // 5. Convert the result pointer (char*) back to a JS string.
@@ -217,7 +217,6 @@
 
         // Tell people we're ready.
         polyfillReadyPromiseResolve();
-        console.log('XSLT WASM Module Loaded');
     }).catch(err => {
         console.error("Error loading XSLT WASM module:", err);
         polyfillReadyPromiseReject(err);
