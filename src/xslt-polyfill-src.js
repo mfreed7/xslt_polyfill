@@ -318,5 +318,7 @@
   window.loadXmlWithXsltFromContent = loadXmlWithXsltFromContent;
   window.loadXmlUrlWithXsltWhenReady = loadXmlUrlWithXsltWhenReady;
   window.loadXmlContentWithXsltWhenReady = loadXmlContentWithXsltWhenReady;
-  console.log(`XSLT polyfill ${!polyfillWillLoad ? "NOT " : ""}installed (native supported: ${nativeSupported}).`);
+  if (!window.xsltPolyfillQuiet) {
+    console.log(`XSLT polyfill ${!polyfillWillLoad ? "NOT " : ""}installed (native supported: ${nativeSupported}).`);
+  }
 })();
