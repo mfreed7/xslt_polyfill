@@ -252,7 +252,7 @@
         const hrefMatch = data.match(/href\s*=\s*(["'])(.*?)\1/)?.[2];
         const typeMatch = data.match(/type\s*=\s*(["'])(.*?)\1/)?.[2]?.toLowerCase();
         if (hrefMatch && (typeMatch === 'text/xsl' || typeMatch === 'application/xslt+xml')) {
-          xsltPath = hrefMatch;
+          xsltPath = hrefMatch.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, '\'').replace(/&amp;/g, '&');
           break;
         }
       }
