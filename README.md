@@ -1,10 +1,18 @@
 # XSLT Polyfill
 
-This is a polyfill for the XSLT W3C 1.0 web standard, roughly as shipped in
-the Chrome browser. It is intended as a replacement for using the XSLT
-processing machinery built into browsers. It does still rely on the XML
-parsing machinery (e.g. `parseFromString(xmlText, "application/xml")`) for
-some things.
+This is a polyfill for the [XSLT W3C 1.0](https://www.w3.org/TR/xslt-10/)
+standard, roughly as shipped in the Chrome browser. It is intended as a
+replacement for using the XSLT processing machinery built into browsers. It
+does still rely on the XML parsing machinery (e.g. `parseFromString(xmlText,
+"application/xml")`) for some things.
+
+Note that the XSLT 1.0 standard is *very* old, and XSLT has evolved well
+beyond the version shipped in web browsers. There are also more up-to-date
+JS-based implementations of XSLT that support the most current standards.
+One such example is [SaxonJS](https://www.saxonica.com/saxonjs/index.xml).
+You should check that out if you're looking for "real" XSLT support; this
+polyfill is intended merely as a stopgap that can be used to maintain
+functionality.
 
 ## Usage
 
@@ -35,6 +43,30 @@ You can convert it to use this polyfill by generating a new HTML file like this:
 This will load the XML file, look for an XML stylesheet, process it with this
 XSLT polyfill, and replace the page with the result of the transformation.
 
+The polyfill (as loaded in the code snippet above) also provides a full
+implementation of the `XSLTProcessor` class, so that code like this will
+also work:
+
+```javascript
+const xsltProcessor = new XSLTProcessor();
+xsltProcessor.importStylesheet(xsltDoc);
+xsltProcessor.transformToFragment(xmlDoc, document);
+```
+
+### Limitations
+
+Note that as of now, there are a few things that don't work perfectly:
+ - The output of the transformation is assumed to be HTML in a few places.
+   If the output is something else, like text or XML, things will likely break.
+ - The `loadXmlUrlWithXsltWhenReady()` function will replace the contents of
+   the *current* document (an `XHTML` document) with the transformed content.
+   Because XHTML always renders in no-quirks mode, if the transformed (HTML)
+   output content *doesn't* include a `<!DOCTYPE>`, then it ordinarily would
+   have rendered in quirks mode, which is different.
+ - There are likely opportunities for performance improvement. In particular,
+   there are a few places where the content takes extra passes through a
+   parser, and those could likely be streamlined.
+
 ## Demos
 
 There are a few demos in the `test/` directory, both the XML/XSL source files
@@ -57,7 +89,7 @@ the XSLT. In particular:
 
 ## Building
 
-The build assumes several tools such as emscripten and make. But the entire
+The build assumes several tools such as `emscripten` and `make`. But the entire
 polyfill can be built with one command:
 
 ```
@@ -79,5 +111,5 @@ This polyfill is also published on npm:
 
 It is also incorporated into a Chrome extension, which automatically applies the polyfill to raw XML files that contain XSLT stylesheets:
 
-https://chromewebstore.google.com/detail/xslt-polyfill/hlahhpnhgficldhfioiafojgdhcppklm?authuser=0&hl=en
+- https://chromewebstore.google.com/detail/xslt-polyfill/hlahhpnhgficldhfioiafojgdhcppklm
 
