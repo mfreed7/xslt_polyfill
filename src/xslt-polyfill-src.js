@@ -149,28 +149,25 @@
         this.#stylesheetText = (new XMLSerializer()).serializeToString(stylesheet);
       }
 
-      transformToFragment(source, document) {
+      transformToText(source) {
         if (!this.#stylesheetText) {
             throw new Error("XSLTProcessor: Stylesheet not imported.");
         }
         const sourceXml = (new XMLSerializer()).serializeToString(source);
-        const output = transformXmlWithXslt(sourceXml, this.#stylesheetText, this.#parameters);
-        // Eventually need to grab the output type, instead of assuming html:
-        const doc = (new DOMParser()).parseFromString(output, 'text/html');
-        const fragment = document.createDocumentFragment();
-        fragment.appendChild(doc.documentElement);
-        return fragment;
+        return transformXmlWithXslt(sourceXml, this.#stylesheetText, this.#parameters);
       }
 
       transformToDocument(source) {
-        if (!this.#stylesheetText) {
-            throw new Error("XSLTProcessor: Stylesheet not imported.");
-        }
-        const sourceXml = (new XMLSerializer()).serializeToString(source);
-        const output = transformXmlWithXslt(sourceXml, this.#stylesheetText, this.#parameters);
-        // output MimeType should ideally be detected from xsl:output method.
-        // Assuming 'application/xml' is a safe default.
-        return (new DOMParser()).parseFromString(output, 'application/xml');
+        const output = this.transformToText(source);
+        // TODO: output MimeType should be detected from xsl:output method.
+        return (new DOMParser()).parseFromString(output, 'text/html');
+      }
+
+      transformToFragment(source, document) {
+        const doc = this.transformToDocument(source);
+        const fragment = document.createDocumentFragment();
+        fragment.appendChild(doc.documentElement);
+        return fragment;
       }
 
       setParameter(namespaceURI, localName, value) {
