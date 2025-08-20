@@ -225,12 +225,17 @@
 
   // Utility functions that get exported even if native XSLT is supported:
 
-  function replaceDoc(text) {
+  function replaceDoc(newContent) {
     // This is a destructive action, replacing the current page.
-    if (text instanceof DocumentFragment) {
-      document.body.replaceChildren(text);
+    if (newContent instanceof DocumentFragment) {
+      const head = newContent.querySelector('head');
+      const headNodes = head?.childNodes ?? [];
+      document.head.replaceChildren(...headNodes);
+      const body = newContent.querySelector('body');
+      const bodyNodes = body?.childNodes ?? newContent;
+      document.body.replaceChildren(...bodyNodes);
     } else {
-      document.documentElement.innerHTML = text;
+      document.documentElement.innerHTML = newContent;
     }
   }
 
