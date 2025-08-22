@@ -232,7 +232,7 @@
       const bodyNodes = body?.childNodes ?? newContent;
       document.body.replaceChildren(...bodyNodes);
       // The html element could have attributes - copy them.
-      const html = document.querySelector('html');
+      const html = newContent.querySelector('html');
       if (html) {
         for (const attr of html.attributes) {
           document.documentElement.setAttribute(attr.name, attr.value);
