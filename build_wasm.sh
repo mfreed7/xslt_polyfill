@@ -40,8 +40,9 @@ emcc -O1 -gsource-map \
   -s INITIAL_MEMORY=134217728 \
   -s STACK_SIZE=5242880 \
   -s EXPORT_NAME="'createXSLTTransformModule'" \
-  -s EXPORTED_FUNCTIONS="['_transform', '_malloc', '_free']" \
-  -s EXPORTED_RUNTIME_METHODS="['cwrap', 'UTF8ToString', 'wasmMemory']" \
+  -s EXPORTED_FUNCTIONS="['_transform', '_malloc', '_free', 'Asyncify']" \
+  -s EXPORTED_RUNTIME_METHODS="['cwrap', 'UTF8ToString', 'wasmMemory', 'Asyncify', 'stringToNewUTF8']" \
+  -s ASYNCIFY \
   -Wl,--export-memory \
   ${LIBS}
 

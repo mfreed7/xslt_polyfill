@@ -9,9 +9,69 @@
 #include <libxml/tree.h>
 #include <libxml/xmlstring.h>
 #include <libxslt/xslt.h>
+#include <libxslt/documents.h>
 #include <libxslt/xsltutils.h>
 #include <libxslt/transform.h>
 #include <libxslt/security.h>
+
+// Forward declaration for our JS fetch function.
+const char* fetch_and_load_document(const char* url);
+
+// Use EM_JS to define a JavaScript function that can be called from C.
+// This function will use the fetch API to get a document from a URL.
+// It uses Asyncify to pause the C code and wait for the async JS to complete.
+EM_JS(const char*, fetch_and_load_document, (const char* url), {
+  return Asyncify.handleSleep(function(wakeUp) {
+    fetch(UTF8ToString(url)).then(function(response) {
+      if (!response.ok) {
+        // Wake up the C code with a null pointer to indicate failure.
+        wakeUp(null);
+        return;
+      }
+      return response.text();
+    }).then(function(text) {
+      if (text === null) {
+        wakeUp(null);
+        return;
+      }
+      // Allocate memory in the WASM heap for the fetched text
+      // and wake up the C code with a pointer to it.
+      var buffer = stringToNewUTF8(text);
+      wakeUp(buffer);
+    }).catch(function() {
+      wakeUp(null);
+    });
+  });
+});
+
+/**
+ * @brief A callback function for libxslt to load external documents.
+ *
+ * This function is called by libxslt when it encounters an <xsl:import>
+ * or <xsl:include> element. It uses the fetch_and_load_document JS function
+ * to get the content from the URL and then parses it into an xmlDocPtr.
+ *
+ * @param URI The URI of the document to load.
+ * @param dict A dictionary for interning strings (not used).
+ * @param options Parser options.
+ * @param ctxt The transformation context (not used).
+ * @param type The type of load (document or stylesheet).
+ * @return An xmlDocPtr for the loaded document, or NULL on failure.
+ */
+static xmlDocPtr docLoader(const xmlChar* URI, xmlDictPtr dict, int options,
+                           void* ctxt, xsltLoadType type) {
+    const char* url = (const char*)URI;
+    const char* content = fetch_and_load_document(url);
+
+    if (content == NULL) {
+        return NULL;
+    }
+
+    xmlDocPtr doc = xmlParseDoc((const xmlChar*)content);
+    free((void*)content); // The content was allocated by stringToNewUTF8.
+
+    return doc;
+}
 
 /**
  * @brief Transforms an XML string using an XSLT string.
@@ -41,6 +101,9 @@ char* transform(const char* xml_content, const char* xslt_content, const char** 
 
     // Initialize the XML library. This is important for thread safety.
     xmlInitParser();
+
+    // Set our custom document loader.
+    xsltSetLoaderFunc(docLoader);
 
     // Parse the input strings into libxml2 documents.
     xml_doc = xmlParseDoc((const xmlChar*)xml_content);
@@ -81,8 +144,9 @@ char* transform(const char* xml_content, const char* xslt_content, const char** 
     xsltSetSecurityPrefs(sec_prefs, XSLT_SECPREF_WRITE_FILE, xsltSecurityForbid);
     xsltSetSecurityPrefs(sec_prefs, XSLT_SECPREF_CREATE_DIRECTORY, xsltSecurityForbid);
     xsltSetSecurityPrefs(sec_prefs, XSLT_SECPREF_WRITE_NETWORK, xsltSecurityForbid);
-    xsltSetSecurityPrefs(sec_prefs, XSLT_SECPREF_READ_FILE, xsltSecurityForbid);
-    xsltSetSecurityPrefs(sec_prefs, XSLT_SECPREF_READ_NETWORK, xsltSecurityForbid);
+    // We don't forbid reading files or from the network, because our custom loader
+    // needs to be able to do that. The security is handled by the browser's
+    // same-origin policy in fetch().
 
     if (xsltSetCtxtSecurityPrefs(sec_prefs, ctxt) != 0) {
         goto cleanup;
@@ -113,6 +177,9 @@ cleanup:
     if (ctxt) xsltFreeTransformContext(ctxt);
     if (xslt_sheet) xsltFreeStylesheet(xslt_sheet);
     if (xml_doc) xmlFreeDoc(xml_doc);
+
+    // Unset the loader function.
+    xsltSetLoaderFunc(NULL);
 
     // Clean up the parser variables.
     xsltCleanupGlobals();
