@@ -43,6 +43,7 @@ emcc -O1 -gsource-map \
   -s EXPORTED_FUNCTIONS="['_transform', '_malloc', '_free', 'Asyncify']" \
   -s EXPORTED_RUNTIME_METHODS="['cwrap', 'UTF8ToString', 'wasmMemory', 'Asyncify', 'stringToNewUTF8']" \
   -s ASYNCIFY \
+  -s ASYNCIFY_IMPORTS="['fetch_and_load_document']" \
   -Wl,--export-memory \
   ${LIBS}
 
