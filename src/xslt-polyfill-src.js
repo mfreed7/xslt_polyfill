@@ -209,8 +209,8 @@
     createXSLTTransformModule()
     .then(Module => {
         WasmModule = Module;
-        // Get a direct reference to the exported C functions.
-        wasm_transform = Module._transform;
+        // Use cwrap to create a JS function that returns a Promise.
+        wasm_transform = Module.cwrap('transform', 'number', ['number', 'number', 'number'], { async: true });
         wasm_free = Module._free;
 
         // Tell people we're ready.
