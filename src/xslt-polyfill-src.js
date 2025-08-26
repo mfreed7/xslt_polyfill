@@ -113,8 +113,6 @@
           // 4. Call the C function with pointers to the data in WASM memory.
           const resultPtr = await wasm_transform(xmlPtr, xsltPtr, paramsPtr);
 
-          console.log('Got return from wasm: ',resultPtr);
-
           if (!resultPtr) {
               throw new Error(`XSLT Transformation failed. See console for details.`);
           }

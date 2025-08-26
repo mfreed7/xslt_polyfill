@@ -61,16 +61,17 @@ EM_JS(const char*, fetch_and_load_document, (const char* url), {
 static xmlDocPtr docLoader(const xmlChar* URI, xmlDictPtr dict, int options,
                            void* ctxt, xsltLoadType type) {
     const char* url = (const char*)URI;
-    printf("About to load URL %s...\n",url);
+    printf("Loading external document from URL %s...\n",url);
     const char* content = fetch_and_load_document(url);
-    printf("Finished loading URL %s. Content is %llu.\n",url,(uint64_t)content);
     
     if (content == NULL) {
         return NULL;
     }
 
     xmlDocPtr doc = xmlParseDoc((const xmlChar*)content);
-    printf("Finished PARSING URL %s. docptr is %llu.\n",url,(uint64_t)doc);
+    if (!doc) {
+      printf("XSLT Transformation Error: Failed to parse included document.\n");
+    }
     free((void*)content); // The content was allocated by stringToNewUTF8.
 
     return doc;
@@ -107,8 +108,6 @@ char* transform(const char* xml_content, const char* xslt_content, const char** 
 
     // Set our custom document loader.
     xsltSetLoaderFunc(docLoader);
-
-    printf("Starting XSLT Transformation...\n");
 
     // Parse the input strings into libxml2 documents.
     xml_doc = xmlParseDoc((const xmlChar*)xml_content);
@@ -166,26 +165,19 @@ char* transform(const char* xml_content, const char* xslt_content, const char** 
     // 5. Apply the transformation using the configured context and parameters.
     result_doc = xsltApplyStylesheetUser(xslt_sheet, xml_doc, (const char**)params, NULL, NULL, ctxt);
     if (result_doc == NULL) {
-        printf("XSLT Transformation Error: Failed to apply stylesheet to XML document.\n");
+        printf("XSLT Transformation Error: Failed to apply stylesheet to XML document (see console logs).\n");
         goto cleanup;
     }
-
-    printf("Got here...\n");
-
 
     // 6. Serialize the result document to a string.
     xmlChar* result_buffer = NULL;
     int result_len = 0;
     xsltSaveResultToString(&result_buffer, &result_len, result_doc, xslt_sheet);
 
-    printf("Got here, after saving to string...\n");
-
     if (result_buffer == NULL) {
         printf("XSLT Transformation Error: Failed to serialize result document to string.\n");
         goto cleanup;
     }
-
-    printf("Got here, afterafter, %llu...\n",(uint64_t)result_buffer);
 
     // The result_buffer was allocated by libxml2. We will return it directly.
     result_string = (char*)result_buffer;
@@ -206,7 +198,5 @@ cleanup:
     xmlCleanupParser();
 
     // Return the allocated string (or NULL on failure).
-    printf("RETURNING: %llu\n",(uint64_t)result_string);
-
     return result_string;
 }
