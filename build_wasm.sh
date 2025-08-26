@@ -8,7 +8,27 @@ BASE_DIR=$(pwd)
 BUILD_DIR="${BASE_DIR}/dist"
 XML2_INSTALL_DIR="${BUILD_DIR}/libxml2-install"
 XSLT_INSTALL_DIR="${BUILD_DIR}/libxslt-install"
+
+# --- Build Configuration ---
+BUILD_MODE="release"
+if [ "$1" == "--debug" ]; then
+  BUILD_MODE="debug"
+fi
+
 OUT_FILE="${BUILD_DIR}/xslt-wasm.js"
+EMCC_OPT_LEVEL="-O1"
+EMCC_ASSERTIONS="-s ASSERTIONS=1"
+EMCC_ASYNCIFY_DEBUG=""
+
+if [ "$BUILD_MODE" == "debug" ]; then
+  OUT_FILE="${BUILD_DIR}/xslt-wasm-debug.js"
+  EMCC_OPT_LEVEL="-O0"
+  EMCC_ASSERTIONS="-s ASSERTIONS=2"
+  EMCC_ASYNCIFY_DEBUG="-s ASYNCIFY_DEBUG=1"
+  echo "--- Building in DEBUG mode ---"
+else
+  echo "--- Building in RELEASE mode (default) ---"
+fi
 
 # --- Set PKG_CONFIG_PATH for emscripten ---
 # This tells pkg-config where to find the .pc files for our compiled libs
@@ -27,7 +47,7 @@ fi
 CFLAGS=$(pkg-config --cflags libxml-2.0 libxslt)
 LIBS=$(pkg-config --libs libxml-2.0 libxslt)
 
-emcc -O1 -gsource-map \
+emcc ${EMCC_OPT_LEVEL} -gsource-map \
   src/transform.c \
   -o ${OUT_FILE} \
   ${CFLAGS} \
@@ -36,15 +56,16 @@ emcc -O1 -gsource-map \
   -s SINGLE_FILE=1 \
   -s ALLOW_MEMORY_GROWTH=1 \
   -s SAFE_HEAP=1 \
-  -s ASSERTIONS=1 \
+  ${EMCC_ASSERTIONS} \
   -s INITIAL_MEMORY=134217728 \
   -s STACK_SIZE=5242880 \
   -s EXPORT_NAME="'createXSLTTransformModule'" \
   -s EXPORTED_FUNCTIONS="['_transform', '_malloc', '_free', 'Asyncify']" \
   -s EXPORTED_RUNTIME_METHODS="['cwrap', 'UTF8ToString', 'wasmMemory', 'Asyncify', 'stringToNewUTF8']" \
   -s ASYNCIFY \
+  ${EMCC_ASYNCIFY_DEBUG} \
   -s ASYNCIFY_IMPORTS="['fetch_and_load_document']" \
-  -s ASYNCIFY_STACK_SIZE=16777216 \
+  -s ASYNCIFY_STACK_SIZE=1073741824 \
   -Wl,--export-memory \
   ${LIBS}
 
