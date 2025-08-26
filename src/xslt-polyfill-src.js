@@ -38,7 +38,7 @@
      * @param {Map<string, string>} parameters
      * @returns {string} The transformed string result.
      */
-    function transformXmlWithXslt(xmlContent, xsltContent, parameters) {
+    async function transformXmlWithXslt(xmlContent, xsltContent, parameters) {
       if (!wasm_transform || !WasmModule) {
         throw new Error(`Polyfill XSLT WASM module not yet loaded. Please wait for the ${promiseName} promise to resolve.`);
       }
@@ -111,7 +111,7 @@
           xsltPtr = writeStringToHeap(xsltContent);
 
           // 4. Call the C function with pointers to the data in WASM memory.
-          const resultPtr = wasm_transform(xmlPtr, xsltPtr, paramsPtr);
+          const resultPtr = await wasm_transform(xmlPtr, xsltPtr, paramsPtr);
 
           console.log('Got return from wasm: ',resultPtr);
 
@@ -150,22 +150,22 @@
         this.#stylesheetText = (new XMLSerializer()).serializeToString(stylesheet);
       }
 
-      transformToText(source) {
+      async transformToText(source) {
         if (!this.#stylesheetText) {
             throw new Error("XSLTProcessor: Stylesheet not imported.");
         }
         const sourceXml = (new XMLSerializer()).serializeToString(source);
-        return transformXmlWithXslt(sourceXml, this.#stylesheetText, this.#parameters);
+        return await transformXmlWithXslt(sourceXml, this.#stylesheetText, this.#parameters);
       }
 
-      transformToDocument(source) {
-        const output = this.transformToText(source);
+      async transformToDocument(source) {
+        const output = await this.transformToText(source);
         // TODO: output MimeType should be detected from xsl:output method.
         return (new DOMParser()).parseFromString(output, 'text/html');
       }
 
-      transformToFragment(source, document) {
-        const doc = this.transformToDocument(source);
+      async transformToFragment(source, document) {
+        const doc = await this.transformToDocument(source);
         const fragment = document.createDocumentFragment();
         fragment.appendChild(doc.documentElement);
         return fragment;
@@ -288,7 +288,7 @@
       // Maybe polyfill, maybe not:
       const xsltProcessor = new XSLTProcessor();
       xsltProcessor.importStylesheet(xsltDoc);
-      resultHtml = xsltProcessor.transformToFragment(xmlDoc, document);
+      resultHtml = await xsltProcessor.transformToFragment(xmlDoc, document);
     } catch (e) {
       return replaceDoc(`Error processing XML/XSLT: ${e}`);
     }

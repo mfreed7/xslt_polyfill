@@ -61,13 +61,16 @@ EM_JS(const char*, fetch_and_load_document, (const char* url), {
 static xmlDocPtr docLoader(const xmlChar* URI, xmlDictPtr dict, int options,
                            void* ctxt, xsltLoadType type) {
     const char* url = (const char*)URI;
+    printf("About to load URL %s...\n",url);
     const char* content = fetch_and_load_document(url);
-
+    printf("Finished loading URL %s. Content is %llu.\n",url,(uint64_t)content);
+    
     if (content == NULL) {
         return NULL;
     }
 
     xmlDocPtr doc = xmlParseDoc((const xmlChar*)content);
+    printf("Finished PARSING URL %s. docptr is %llu.\n",url,(uint64_t)doc);
     free((void*)content); // The content was allocated by stringToNewUTF8.
 
     return doc;

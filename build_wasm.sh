@@ -64,6 +64,8 @@ emcc ${EMCC_OPT_LEVEL} -gsource-map \
   -s ASYNCIFY \
   ${EMCC_ASYNCIFY_DEBUG} \
   -s ASYNCIFY_IMPORTS=fetch_and_load_document \
+  -s ASYNCIFY_ADD=transform \
+  -s ASYNCIFY_IGNORE_INDIRECT=0 \
   -s ASYNCIFY_STACK_SIZE=5MB \
   -Wl,--export-memory \
   ${LIBS}
