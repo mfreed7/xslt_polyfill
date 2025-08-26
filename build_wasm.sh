@@ -51,21 +51,20 @@ emcc ${EMCC_OPT_LEVEL} -gsource-map \
   src/transform.c \
   -o ${OUT_FILE} \
   ${CFLAGS} \
-  -s WASM=1 \
-  -s MODULARIZE=1 \
-  -s SINGLE_FILE=1 \
-  -s ALLOW_MEMORY_GROWTH=1 \
-  -s SAFE_HEAP=1 \
+  -s MODULARIZE \
+  -s SINGLE_FILE \
+  -s ALLOW_MEMORY_GROWTH \
+  -s SAFE_HEAP \
   ${EMCC_ASSERTIONS} \
-  -s INITIAL_MEMORY=134217728 \
-  -s STACK_SIZE=5242880 \
-  -s EXPORT_NAME="'createXSLTTransformModule'" \
-  -s EXPORTED_FUNCTIONS="['_transform', '_malloc', '_free', 'Asyncify']" \
-  -s EXPORTED_RUNTIME_METHODS="['cwrap', 'UTF8ToString', 'wasmMemory', 'Asyncify', 'stringToNewUTF8']" \
+  -s INITIAL_MEMORY=130MB \
+  -s STACK_SIZE=5MB \
+  -s EXPORT_NAME=createXSLTTransformModule \
+  -s EXPORTED_FUNCTIONS=_transform,_malloc,_free,Asyncify \
+  -s EXPORTED_RUNTIME_METHODS=cwrap,UTF8ToString,wasmMemory,Asyncify,stringToNewUTF8 \
   -s ASYNCIFY \
   ${EMCC_ASYNCIFY_DEBUG} \
-  -s ASYNCIFY_IMPORTS="['fetch_and_load_document']" \
-  -s ASYNCIFY_STACK_SIZE=1073741824 \
+  -s ASYNCIFY_IMPORTS=fetch_and_load_document \
+  -s ASYNCIFY_STACK_SIZE=5MB \
   -Wl,--export-memory \
   ${LIBS}
 

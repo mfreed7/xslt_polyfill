@@ -49,7 +49,6 @@
       let xmlPtr = 0;
       let xsltPtr = 0;
       let paramsPtr = 0;
-      let errorMsgPtrPtr = 0;
       const paramStringPtrs = [];
 
       // Helper to write JS strings to WASM memory manually.
@@ -111,40 +110,29 @@
           xmlPtr = writeStringToHeap(xmlContent);
           xsltPtr = writeStringToHeap(xsltContent);
 
-          // 4. Allocate memory for the error message pointer (char**).
-          const ptrSize = 4;
-          errorMsgPtrPtr = WasmModule._malloc(ptrSize);
-          if (!errorMsgPtrPtr) throw new Error("WASM malloc failed for error message pointer.");
-          new DataView(WasmModule.wasmMemory.buffer).setUint32(errorMsgPtrPtr, 0, true); // Initialize to NULL
+          // 4. Call the C function with pointers to the data in WASM memory.
+          const resultPtr = wasm_transform(xmlPtr, xsltPtr, paramsPtr);
 
-          // 5. Call the C function with pointers to the data in WASM memory.
-          const resultPtr = wasm_transform(xmlPtr, xsltPtr, paramsPtr, errorMsgPtrPtr);
+          console.log('Got return from wasm: ',resultPtr);
 
           if (!resultPtr) {
-              let errorMessage = "";
-              const errorMsgPtr = new DataView(WasmModule.wasmMemory.buffer).getUint32(errorMsgPtrPtr, true);
-              if (errorMsgPtr) {
-                  errorMessage = readStringFromHeap(errorMsgPtr);
-                  wasm_free(errorMsgPtr); // Free the string allocated in C.
-              }
-              throw new Error(`XSLT Transformation failed${errorMessage ? ': ' + errorMessage : ''}`);
+              throw new Error(`XSLT Transformation failed. See console for details.`);
           }
 
-          // 6. Convert the result pointer (char*) back to a JS string.
+          // 5. Convert the result pointer (char*) back to a JS string.
           const resultString = readStringFromHeap(resultPtr);
 
-          // 7. Free the result pointer itself, which was allocated by the C code.
+          // 6. Free the result pointer itself, which was allocated by the C code.
           wasm_free(resultPtr);
 
           return resultString;
 
       } finally {
-          // 8. Clean up all allocated memory to prevent memory leaks in the WASM heap.
+          // 7. Clean up all allocated memory to prevent memory leaks in the WASM heap.
           if (xmlPtr) wasm_free(xmlPtr);
           if (xsltPtr) wasm_free(xsltPtr);
           paramStringPtrs.forEach(ptr => wasm_free(ptr));
           if (paramsPtr) wasm_free(paramsPtr);
-          if (errorMsgPtrPtr) wasm_free(errorMsgPtrPtr);
       }
     }
 

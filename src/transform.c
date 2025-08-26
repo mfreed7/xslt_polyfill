@@ -90,7 +90,7 @@ static xmlDocPtr docLoader(const xmlChar* URI, xmlDictPtr dict, int options,
  * @return A pointer to a new string containing the transformed document, or NULL on error.
  */
 EMSCRIPTEN_KEEPALIVE
-char* transform(const char* xml_content, const char* xslt_content, const char** params, char** error_message) {
+char* transform(const char* xml_content, const char* xslt_content, const char** params) {
     xmlDocPtr xml_doc = NULL;
     xmlDocPtr xslt_doc = NULL;
     xsltStylesheetPtr xslt_sheet = NULL;
@@ -99,26 +99,24 @@ char* transform(const char* xml_content, const char* xslt_content, const char** 
     xsltSecurityPrefsPtr sec_prefs = NULL;
     char* result_string = NULL;
 
-    if (error_message) {
-        *error_message = NULL;
-    }
-
     // Initialize the XML library. This is important for thread safety.
     xmlInitParser();
 
     // Set our custom document loader.
     xsltSetLoaderFunc(docLoader);
 
+    printf("Starting XSLT Transformation...\n");
+
     // Parse the input strings into libxml2 documents.
     xml_doc = xmlParseDoc((const xmlChar*)xml_content);
     if (xml_doc == NULL) {
-        if (error_message) *error_message = strdup("Failed to parse XML document.");
+        printf("XSLT Transformation Error: Failed to parse XML document.\n");
         goto cleanup;
     }
 
     xslt_doc = xmlParseDoc((const xmlChar*)xslt_content);
     if (xslt_doc == NULL) {
-        if (error_message) *error_message = strdup("Failed to parse XSLT document.");
+        printf("XSLT Transformation Error: Failed to parse XSLT document.\n");
         goto cleanup;
     }
 
@@ -126,7 +124,7 @@ char* transform(const char* xml_content, const char* xslt_content, const char** 
     if (xslt_sheet == NULL) {
         // xsltParseStylesheetDoc frees xslt_doc on success, so we only free it on failure.
         xmlFreeDoc(xslt_doc);
-        if (error_message) *error_message = strdup("Failed to parse XSLT stylesheet from document.");
+        printf("XSLT Transformation Error: Failed to parse XSLT stylesheet from document.\n");
         goto cleanup;
     }
     // No need to free xslt_doc separately from here on, it's owned by xslt_sheet.
@@ -140,14 +138,14 @@ char* transform(const char* xml_content, const char* xslt_content, const char** 
     // 3. Create a new transformation context.
     ctxt = xsltNewTransformContext(xslt_sheet, xml_doc);
     if (ctxt == NULL) {
-        if (error_message) *error_message = strdup("Failed to create XSLT transformation context.");
+        printf("XSLT Transformation Error: Failed to create XSLT transformation context.\n");
         goto cleanup;
     }
 
     // 4. Set up security preferences to disable file and network access.
     sec_prefs = xsltNewSecurityPrefs();
     if (sec_prefs == NULL) {
-        if (error_message) *error_message = strdup("Failed to create XSLT security preferences.");
+        printf("XSLT Transformation Error: Failed to create XSLT security preferences.\n");
         goto cleanup;
     }
     xsltSetSecurityPrefs(sec_prefs, XSLT_SECPREF_WRITE_FILE, xsltSecurityForbid);
@@ -158,26 +156,33 @@ char* transform(const char* xml_content, const char* xslt_content, const char** 
     // same-origin policy in fetch().
 
     if (xsltSetCtxtSecurityPrefs(sec_prefs, ctxt) != 0) {
-        if (error_message) *error_message = strdup("Failed to set security preferences on context.");
+        printf("XSLT Transformation Error: Failed to set security preferences on context.\n");
         goto cleanup;
     }
 
     // 5. Apply the transformation using the configured context and parameters.
     result_doc = xsltApplyStylesheetUser(xslt_sheet, xml_doc, (const char**)params, NULL, NULL, ctxt);
     if (result_doc == NULL) {
-        if (error_message) *error_message = strdup("Failed to apply stylesheet to XML document.");
+        printf("XSLT Transformation Error: Failed to apply stylesheet to XML document.\n");
         goto cleanup;
     }
+
+    printf("Got here...\n");
+
 
     // 6. Serialize the result document to a string.
     xmlChar* result_buffer = NULL;
     int result_len = 0;
     xsltSaveResultToString(&result_buffer, &result_len, result_doc, xslt_sheet);
 
+    printf("Got here, after saving to string...\n");
+
     if (result_buffer == NULL) {
-        if (error_message) *error_message = strdup("Failed to serialize result document to string.");
+        printf("XSLT Transformation Error: Failed to serialize result document to string.\n");
         goto cleanup;
     }
+
+    printf("Got here, afterafter, %llu...\n",(uint64_t)result_buffer);
 
     // The result_buffer was allocated by libxml2. We will return it directly.
     result_string = (char*)result_buffer;
@@ -198,5 +203,7 @@ cleanup:
     xmlCleanupParser();
 
     // Return the allocated string (or NULL on failure).
+    printf("RETURNING: %llu\n",(uint64_t)result_string);
+
     return result_string;
 }
