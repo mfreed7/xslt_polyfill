@@ -29,29 +29,41 @@ this:
 </page>
 ```
 
-You can convert it to use this polyfill by generating a new HTML file like this:
+You can convert it to use this polyfill by simply adding the polyfill directly
+to the XML, like this (note the new `<script>` element):
+
+```xml
+<?xml version="1.0"?>
+<?xml-stylesheet type="text/xsl" href="demo.xsl"?>
+<page>
+ <script src="../xslt-polyfill.min.js" xmlns="http://www.w3.org/1999/xhtml"></script>
+ <message>
+  Hello World.
+ </message>
+</page>
+```
+
+This will automatically load the XML and XSLT, process it with this
+XSLT polyfill, and replace the page with the result of the transformation.
+The example above is available in the `test/` folder of this repo:
+[`demo.xml`](https://github.com/mfreed7/xslt_polyfill/blob/main/test/demo.xml).
+
+The polyfill also provides a full implementation of the `XSLTProcessor` class,
+so that code like this will also work:
 
 ```html
 <!DOCTYPE html>
-
-<script src="xslt-polyfill.min.js"></script>
+<script src="../xslt-polyfill.min.js"></script>
 <script>
-  window.loadXmlUrlWithXsltWhenReady('./demo.xml');
-</script>
-```
-
-This will load the XML file, look for an XML stylesheet, process it with this
-XSLT polyfill, and replace the page with the result of the transformation.
-
-The polyfill (as loaded in the code snippet above) also provides a full
-implementation of the `XSLTProcessor` class, so that code like this will
-also work:
-
-```javascript
 const xsltProcessor = new XSLTProcessor();
 xsltProcessor.importStylesheet(xsltDoc);
 xsltProcessor.transformToFragment(xmlDoc, document);
+</script>
 ```
+
+The example above is available in the `test/` folder of this repo:
+[`XSLTProcessor_example.html`](https://github.com/mfreed7/xslt_polyfill/blob/main/test/XSLTProcessor_example.html).
+
 
 ### Limitations
 
@@ -69,27 +81,23 @@ Note that as of now, there are a few things that don't work perfectly:
 
 ## Demos
 
-There are a few demos in the `test/` directory, both the XML/XSL source files
-and the corresponding `.html` files that use the polyfill to load and process
-the XSLT. In particular:
+There are a few demos in the `test/` directory:
 
-- `basic_example.html`: a test of the `XSLTProcessor` polyfill, which offers
-  JS-based XSLT processing.
-  \[[Run](https://mfreed7.github.io/xslt_polyfill/test/basic_example.html)\]
-- `demo.html`: a polyfill "replacement" of an XML document, `demo.xml`. This
-  example uses the `loadXmlUrlWithXsltWhenReady()` function to load `demo.xml`,
-  find its contained XSL processing instruction pointing to `demo.xsl`, load
-  that file, and then process them together, replacing the document.
-  \[[Run](https://mfreed7.github.io/xslt_polyfill/test/demo.html)\]
-  \[Compare to [native XML/XSLT](https://mfreed7.github.io/xslt_polyfill/test/demo.xml)\]
-- `demo_large.html`: a much larger example, taken from a public site, which
-  does the same as `demo.html`, but with a more complex/realistic document.
+- `XSLTProcessor_example.html`: a test of the `XSLTProcessor` polyfill, which
+  offers JS-based XSLT processing.
+  \[[Run](https://mfreed7.github.io/xslt_polyfill/test/XSLTProcessor_example.html)\]
+- `demo.xml`: a simple XML file that has the polyfill loaded by a single added
+  `<script>` tag. The polyfill loads and automatically does the XSLT transformation,
+  replacing the document.
+  \[[Run](https://mfreed7.github.io/xslt_polyfill/test/demo.xml)\]
+- `demo_large.xml`: a much larger example, taken from a public site, which
+  does the same as `demo.xml`, but with a more complex/realistic document.
   \[[Run](https://mfreed7.github.io/xslt_polyfill/test/demo_large.html)\]
-  \[Compare to [native XML/XSLT](https://mfreed7.github.io/xslt_polyfill/test/demo_large.xml)\]
-- `demo_large_inline_polyfill.xml`: the same XML source file as
-  `demo_large.html` above, but with the polyfill injected directly into the
-  XML, via an inline `<script>` tag. No need for a separate `.html` file in
-  this case. \[[Run](https://mfreed7.github.io/xslt_polyfill/test/demo_large_inline_polyfill.xml)\]
+- `demo_html.html`: a polyfill "replacement" of an XML document, `demo.xml`. This
+  example uses the `loadXmlUrlWithXsltWhenReady()` function from the polyfill to
+  load `demo.xml`, find its contained XSL processing instruction pointing to
+  `demo.xsl`, load that file, and then process them together, replacing the document.
+  \[[Run](https://mfreed7.github.io/xslt_polyfill/test/demo.html)\]
 
 ## Building
 
