@@ -223,7 +223,14 @@
 
   function replaceDoc(newContent) {
     // This is a destructive action, replacing the current page.
-    if (newContent instanceof DocumentFragment) {
+    if (document instanceof XMLDocument) {
+      const htmlRoot = document.createElementNS(
+        "http://www.w3.org/1999/xhtml",
+        "html"
+      );
+      htmlRoot.appendChild(newContent);
+      document.replaceChild(htmlRoot, document.documentElement);
+    } else if (newContent instanceof DocumentFragment) {
       const head = newContent.querySelector('head');
       const headNodes = head?.childNodes ?? [];
       document.head.replaceChildren(...headNodes);
@@ -319,6 +326,25 @@
       return xsltPolyfillReady().then(() => loadXmlWithXsltFromContent(xmlContent, xmlUrl));
     } else {
       return loadXmlWithXsltFromContent(xmlContent, xmlUrl);
+    }
+  }
+
+  function replaceCurrentXMLDoc() {
+    const xml = new XMLSerializer().serializeToString(document);
+    loadXmlContentWithXsltWhenReady(xml, window.location.href).catch(
+      (err) => {
+        replaceDoc(`Error displaying XML file: ${err.message || err.toString()}`);
+      }
+    );
+  }
+
+  if (!nativeSupported && document instanceof XMLDocument) {
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", () => {
+        replaceCurrentXMLDoc();
+      });
+    } else {
+      replaceCurrentXMLDoc();
     }
   }
 
