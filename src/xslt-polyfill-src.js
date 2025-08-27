@@ -331,10 +331,10 @@
   }
 
   function replaceCurrentXMLDoc() {
-    const doc = new XMLSerializer().serializeToString(document);
-    loadXmlContentWithXsltWhenReady(doc, window.location.href, false).catch(
+    const xml = new XMLSerializer().serializeToString(document);
+    loadXmlContentWithXsltWhenReady(xml, window.location.href).catch(
       (err) => {
-        console.error("Error transforming current XML document:", err);
+        replaceDoc(`Error displaying XML file: ${err.message || err.toString()}`);
       }
     );
   }
