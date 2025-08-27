@@ -97,7 +97,7 @@ There are a few demos in the `test/` directory:
   example uses the `loadXmlUrlWithXsltWhenReady()` function from the polyfill to
   load `demo.xml`, find its contained XSL processing instruction pointing to
   `demo.xsl`, load that file, and then process them together, replacing the document.
-  \[[Run](https://mfreed7.github.io/xslt_polyfill/test/demo.html)\]
+  \[[Run](https://mfreed7.github.io/xslt_polyfill/test/demo_html.html)\]
 
 ## Building
 
