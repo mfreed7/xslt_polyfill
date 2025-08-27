@@ -86,6 +86,10 @@ the XSLT. In particular:
   does the same as `demo.html`, but with a more complex/realistic document.
   \[[Run](https://mfreed7.github.io/xslt_polyfill/test/demo_large.html)\]
   \[Compare to [native XML/XSLT](https://mfreed7.github.io/xslt_polyfill/test/demo_large.xml)\]
+- `demo_large_inline_polyfill.xml`: the same XML source file as
+  `demo_large.html` above, but with the polyfill injected directly into the
+  XML, via an inline `<script>` tag. No need for a separate `.html` file in
+  this case. \[[Run](https://mfreed7.github.io/xslt_polyfill/test/demo_large_inline_polyfill.xml)\]
 
 ## Building
 
