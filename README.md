@@ -92,7 +92,7 @@ There are a few demos in the `test/` directory:
   \[[Run](https://mfreed7.github.io/xslt_polyfill/test/demo.xml)\]
 - `demo_large.xml`: a much larger example, taken from a public site, which
   does the same as `demo.xml`, but with a more complex/realistic document.
-  \[[Run](https://mfreed7.github.io/xslt_polyfill/test/demo_large.html)\]
+  \[[Run](https://mfreed7.github.io/xslt_polyfill/test/demo_large.xml)\]
 - `demo_html.html`: a polyfill "replacement" of an XML document, `demo.xml`. This
   example uses the `loadXmlUrlWithXsltWhenReady()` function from the polyfill to
   load `demo.xml`, find its contained XSL processing instruction pointing to
