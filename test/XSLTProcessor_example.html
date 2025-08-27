@@ -35,6 +35,8 @@ xsltPolyfillReady().then(() => {
 
   const xsltProcessor = new XSLTProcessor();
   xsltProcessor.importStylesheet(xsltDoc);
-  document.getElementById("results").append(xsltProcessor.transformToFragment(xmlDoc, document));
+  return xsltProcessor.transformToFragment(xmlDoc, document);
+}).then((result) => {
+  document.getElementById("results").append(result);
 });
 </script>
