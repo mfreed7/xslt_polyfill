@@ -24,6 +24,7 @@
     polyfillReadyPromiseReject = reject;
   });
   window.xsltUsePolyfillAlways = ('xsltUsePolyfillAlways' in window) ? window.xsltUsePolyfillAlways : false;
+  window.xsltDontAutoloadXmlDocs = ('xsltDontAutoloadXmlDocs' in window) ? window.xsltDontAutoloadXmlDocs : false;
   const nativeSupported = 'XSLTProcessor' in window;
   const polyfillWillLoad = !nativeSupported || window.xsltUsePolyfillAlways;
   if (polyfillWillLoad) {
@@ -228,8 +229,8 @@
         "http://www.w3.org/1999/xhtml",
         "html"
       );
-      htmlRoot.appendChild(newContent);
-      document.replaceChild(htmlRoot, document.documentElement);
+      htmlRoot.append(newContent);
+      document.documentElement.replaceWith(htmlRoot);
     } else if (newContent instanceof DocumentFragment) {
       const head = newContent.querySelector('head');
       const headNodes = head?.childNodes ?? [];
@@ -338,7 +339,7 @@
     );
   }
 
-  if (!nativeSupported && document instanceof XMLDocument) {
+  if (!nativeSupported && document instanceof XMLDocument && !xsltDontAutoloadXmlDocs) {
     if (document.readyState === "loading") {
       document.addEventListener("DOMContentLoaded", () => {
         replaceCurrentXMLDoc();
