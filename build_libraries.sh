@@ -30,7 +30,6 @@ emconfigure ./configure \
     --without-http \
     --without-ftp \
     --without-python \
-    --without-iconv \
     --without-zlib \
     --without-lzma \
     --disable-shared \
