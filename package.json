@@ -1,6 +1,6 @@
 {
   "name": "xslt-polyfill",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "description": "A polyfill for browser-based XSLTProcessor and friends",
   "keywords": "XSLT, XML, XSLTProcessor",
   "homepage": "https://github.com/mfreed7/xslt_polyfill",
@@ -12,6 +12,9 @@
   "author": "Mason Freed <mfreed@mfreed.com>",
   "license": "BSD-3-Clause",
   "main": "xslt-polyfill.min.js",
+  "files": [
+    "xslt-polyfill.min.js"
+  ],
   "dependencies": {}
 }
 
