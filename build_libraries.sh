@@ -24,6 +24,23 @@ export LDFLAGS="-s ASYNCIFY"
 emconfigure ./configure \
     --host=wasm32-unknown-emscripten \
     --prefix="${XML2_INSTALL_DIR}" \
+    --with-minimum \
+    --with-output \
+    --with-writer \
+    --with-html \
+    --with-reader \
+    --with-sax1 \
+    --with-legacy=no \
+    --with-c14n=no \
+    --with-schemas=no \
+    --with-schematron=no \
+    --without-debug \
+    --without-modules \
+    --without-push \
+    --without-regexps \
+    --without-valid \
+    --without-xptr \
+    --without-xinclude \
     --with-xpath \
     --without-threads \
     --without-catalog \
@@ -55,6 +72,10 @@ emconfigure ./configure \
     --prefix="${XSLT_INSTALL_DIR}" \
     --with-libxml-prefix="${XML2_INSTALL_DIR}" \
     --without-python \
+    --without-debugger \
+    --without-profiler \
+    --without-plugins \
+    --with-crypto=no \
     --disable-shared \
     --enable-static
 

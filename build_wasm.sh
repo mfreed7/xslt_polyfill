@@ -16,8 +16,8 @@ if [ "$1" == "--debug" ]; then
 fi
 
 OUT_FILE="${BUILD_DIR}/xslt-wasm.js"
-EMCC_OPT_LEVEL="-O1"
-EMCC_ASSERTIONS="-s ASSERTIONS=1"
+EMCC_OPT_LEVEL="-Os"
+EMCC_ASSERTIONS="-s ASSERTIONS=0"
 EMCC_ASYNCIFY_DEBUG=""
 
 if [ "$BUILD_MODE" == "debug" ]; then
