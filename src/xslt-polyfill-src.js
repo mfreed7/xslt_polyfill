@@ -52,6 +52,16 @@
       let paramsPtr = 0;
       const paramStringPtrs = [];
 
+      // Helper to write byte arrays to WASM memory manually.
+      const writeBytesToHeap = (bytes) => {
+          const ptr = WasmModule._malloc(bytes.length + 1);
+          if (!ptr) throw new Error(`WASM malloc failed for bytes of length ${bytes.length}`);
+          const heapu8 = new Uint8Array(WasmModule.wasmMemory.buffer);
+          heapu8.set(bytes, ptr);
+          heapu8[ptr + bytes.length] = 0; // Null terminator
+          return ptr;
+      };
+
       // Helper to write JS strings to WASM memory manually.
       const writeStringToHeap = (str) => {
           const encodedStr = textEncoder.encode(str);
@@ -108,11 +118,13 @@
           }
 
           // 3. Allocate memory for XML and XSLT content.
-          xmlPtr = writeStringToHeap(xmlContent);
-          xsltPtr = writeStringToHeap(xsltContent);
+          const xmlBytes = (xmlContent instanceof Uint8Array) ? xmlContent : textEncoder.encode(xmlContent);
+          const xsltBytes = (xsltContent instanceof Uint8Array) ? xsltContent : textEncoder.encode(xsltContent);
+          xmlPtr = writeBytesToHeap(xmlBytes);
+          xsltPtr = writeBytesToHeap(xsltBytes);
 
           // 4. Call the C function with pointers to the data in WASM memory.
-          const resultPtr = await wasm_transform(xmlPtr, xsltPtr, paramsPtr);
+          const resultPtr = await wasm_transform(xmlPtr, xmlBytes.byteLength, xsltPtr, xsltBytes.byteLength, paramsPtr);
 
           if (!resultPtr) {
               throw new Error(`XSLT Transformation failed. See console for details.`);
@@ -209,7 +221,7 @@
     .then(Module => {
         WasmModule = Module;
         // Use cwrap to create a JS function that returns a Promise.
-        wasm_transform = Module.cwrap('transform', 'number', ['number', 'number', 'number'], { async: true });
+        wasm_transform = Module.cwrap('transform', 'number', ['number', 'number', 'number', 'number', 'number'], { async: true });
         wasm_free = Module._free;
 
         // Tell people we're ready.
@@ -218,6 +230,82 @@
         console.error("Error loading XSLT WASM module:", err);
         polyfillReadyPromiseReject(err);
     });
+
+    function absoluteUrl(url) {
+      return new URL(url, window.location.href).href;
+    }
+    async function loadXmlWithXsltFromUrl(url) {
+      // Fetch the XML file from provided url.
+      url = absoluteUrl(url);
+      const xmlResponse = await fetch(url);
+      if (!xmlResponse.ok) {
+        return replaceDoc(`Failed to fetch XML file: ${xmlResponse.statusText}`);
+      }
+      const xmlBytes = new Uint8Array(await xmlResponse.arrayBuffer());
+      return loadXmlWithXsltFromBytes(xmlBytes, url);
+    }
+  
+    function loadXmlUrlWithXsltWhenReady(url) {
+      return xsltPolyfillReady().then(() => loadXmlWithXsltFromUrl(url));
+    }
+  
+    async function loadXmlWithXsltFromBytes(xmlBytes, xmlUrl) {
+      xmlUrl = absoluteUrl(xmlUrl);
+      // Look inside XML file for a processing instruction with an XSLT file.
+      // We decode only a small chunk at the beginning for safety and performance.
+      const decoder = new TextDecoder();
+      const xmlTextChunk = decoder.decode(xmlBytes.subarray(0, 2048));
+  
+      let xsltPath = null;
+      const piMatch = xmlTextChunk.match(/<\?xml-stylesheet\s+([^>]*?)\?>/);
+      if (piMatch) {
+        const piData = piMatch[1];
+        const hrefMatch = piData.match(/href\s*=\s*(["'])(.*?)\1/)?.[2];
+        const typeMatch = piData.match(/type\s*=\s*(["'])(.*?)\1/)?.[2]?.toLowerCase();
+        if (hrefMatch && (typeMatch === 'text/xsl' || typeMatch === 'application/xslt+xml')) {
+          // Decode HTML entities from the path.
+          xsltPath = hrefMatch.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, '\'').replace(/&amp;/g, '&');
+        }
+      }
+  
+      if (!xsltPath) {
+        // Do not display an error, just leave the original content.
+        console.warn(`XSLT Polyfill: No XSLT processing instruction found in ${xmlUrl}`);
+        return;
+      }
+  
+      // Fetch the XSLT file, resolving its path relative to the XML file's URL.
+      const xsltUrl = new URL(xsltPath, xmlUrl);
+      const xsltResponse = await fetch(xsltUrl.href);
+      if (!xsltResponse.ok) {
+        return replaceDoc(`Failed to fetch XSLT file: ${xsltResponse.statusText}`);
+      }
+      const xsltBytes = new Uint8Array(await xsltResponse.arrayBuffer());
+  
+          // Process XML/XSLT and replace the document.
+          let resultHtml;
+          try {
+            resultHtml = await transformXmlWithXslt(xmlBytes, xsltBytes, null);
+          } catch (e) {
+            return replaceDoc(`Error processing XML/XSLT: ${e}`);
+          }
+      
+          // Replace the document with the result
+          const parser = new DOMParser();
+          const doc = parser.parseFromString(resultHtml, 'text/html');
+          const fragment = document.createDocumentFragment();
+          if (doc.documentElement) {
+            fragment.appendChild(doc.documentElement);
+          }
+          replaceDoc(fragment);    }
+    
+    function loadXmlContentWithXsltFromBytesWhenReady(xmlBytes, xmlUrl) {
+      return xsltPolyfillReady().then(() => loadXmlWithXsltFromBytes(xmlBytes, xmlUrl));
+    }
+
+    window.loadXmlWithXsltFromUrl = loadXmlWithXsltFromUrl;
+    window.loadXmlUrlWithXsltWhenReady = loadXmlUrlWithXsltWhenReady;
+    window.loadXmlContentWithXsltFromBytesWhenReady = loadXmlContentWithXsltFromBytesWhenReady;
   } // if (polyfillWillLoad)
 
   // Utility functions that get exported even if native XSLT is supported:
@@ -250,86 +338,6 @@
     }
   }
 
-  async function loadXmlWithXsltFromContent(xmlText, xmlUrl) {
-    xmlUrl = absoluteUrl(xmlUrl);
-    // Look inside XML file for a processing instruction with an XSLT file.
-    const parser = new DOMParser();
-    const xmlDoc = parser.parseFromString(xmlText, "application/xml");
-    const parserError = xmlDoc.querySelector('parsererror');
-    if (parserError) {
-      return replaceDoc(`Error parsing XML file: ${parserError.textContent}`);
-    }
-
-    let xsltPath = null;
-    for (const node of xmlDoc.childNodes) {
-      if (node.nodeType === Node.PROCESSING_INSTRUCTION_NODE && node.target === 'xml-stylesheet') {
-        const data = node.data;
-        const hrefMatch = data.match(/href\s*=\s*(["'])(.*?)\1/)?.[2];
-        const typeMatch = data.match(/type\s*=\s*(["'])(.*?)\1/)?.[2]?.toLowerCase();
-        if (hrefMatch && (typeMatch === 'text/xsl' || typeMatch === 'application/xslt+xml')) {
-          xsltPath = hrefMatch.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, '\'').replace(/&amp;/g, '&');
-          break;
-        }
-      }
-    }
-
-    if (!xsltPath) {
-      return replaceDoc(`No XSLT processing instruction found in ${xmlUrl}`);
-    }
-
-    // Fetch the XSLT file, resolving its path relative to the XML file's URL.
-    const xsltUrl = new URL(xsltPath, xmlUrl);
-    const xsltResponse = await fetch(xsltUrl.href);
-    if (!xsltResponse.ok) {
-      return replaceDoc(`Failed to fetch XSLT file: ${xsltResponse.statusText}`);
-    }
-    const xsltText = await xsltResponse.text();
-
-    // Process XML/XSLT and replace the document.
-    let resultHtml;
-    try {
-      const parser = new DOMParser();
-      const xmlDoc = parser.parseFromString(xmlText, "application/xml");
-      const xsltDoc = parser.parseFromString(xsltText, "application/xml");
-      // Maybe polyfill, maybe not:
-      const xsltProcessor = new XSLTProcessor();
-      xsltProcessor.importStylesheet(xsltDoc);
-      resultHtml = await xsltProcessor.transformToFragment(xmlDoc, document);
-    } catch (e) {
-      return replaceDoc(`Error processing XML/XSLT: ${e}`);
-    }
-    // Replace the document with the result
-    replaceDoc(resultHtml);
-  }
-  function absoluteUrl(url) {
-    return new URL(url, window.location.href).href;
-  }
-  async function loadXmlWithXsltFromUrl(url) {
-    // Fetch the XML file from provided url.
-    url = absoluteUrl(url);
-    const xmlResponse = await fetch(url);
-    if (!xmlResponse.ok) {
-      return replaceDoc(`Failed to fetch XML file: ${xmlResponse.statusText}`);
-    }
-    const xmlText = await xmlResponse.text();
-    return loadXmlWithXsltFromContent(xmlText, url);
-  }
-
-  function loadXmlUrlWithXsltWhenReady(url) {
-    if (polyfillWillLoad) {
-      return xsltPolyfillReady().then(() => loadXmlWithXsltFromUrl(url));
-    } else {
-      return loadXmlWithXsltFromUrl(url);
-    }
-  }
-  function loadXmlContentWithXsltWhenReady(xmlContent, xmlUrl) {
-    if (polyfillWillLoad) {
-      return xsltPolyfillReady().then(() => loadXmlWithXsltFromContent(xmlContent, xmlUrl));
-    } else {
-      return loadXmlWithXsltFromContent(xmlContent, xmlUrl);
-    }
-  }
-
   function replaceCurrentXMLDoc() {
     const xml = new XMLSerializer().serializeToString(document);
     loadXmlContentWithXsltWhenReady(xml, window.location.href).catch(
@@ -349,10 +357,6 @@
     }
   }
 
-  window.loadXmlWithXsltFromUrl = loadXmlWithXsltFromUrl;
-  window.loadXmlWithXsltFromContent = loadXmlWithXsltFromContent;
-  window.loadXmlUrlWithXsltWhenReady = loadXmlUrlWithXsltWhenReady;
-  window.loadXmlContentWithXsltWhenReady = loadXmlContentWithXsltWhenReady;
   if (!window.xsltPolyfillQuiet) {
     console.log(`XSLT polyfill ${!polyfillWillLoad ? "NOT " : ""}installed (native supported: ${nativeSupported}).`);
   }

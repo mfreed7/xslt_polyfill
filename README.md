@@ -75,6 +75,11 @@ Note that as of now, there are a few things that don't work perfectly:
    Because XHTML always renders in no-quirks mode, if the transformed (HTML)
    output content *doesn't* include a `<!DOCTYPE>`, then it ordinarily would
    have rendered in quirks mode, which is different.
+ - Since the polyfill uses the Fetch API to request any additional resources
+   linked via `<xsl:include>` or `<xsl:import>` in the XML source, these
+   requests are subject to CORS, which might block the request. The browser-
+   native XSLT processor is able to load these resources, despite the CORS
+   violation, leading to a behavior difference.
  - There are likely opportunities for performance improvement. In particular,
    there are a few places where the content takes extra passes through a
    parser, and those could likely be streamlined.

@@ -38,7 +38,14 @@ EM_JS(const char*, fetch_and_load_document, (const char* url), {
       // and wake up the C code with a pointer to it.
       var buffer = stringToNewUTF8(text);
       wakeUp(buffer);
-    }).catch(function() {
+    }).catch(function(err) {
+      console.error(
+        "XSLT Polyfill: Failed to fetch an external document included via <xsl:import> or <xsl:include>.\n" +
+        "URL: " + UTF8ToString(url) + "\n" +
+        "This is often due to the browser's CORS (Cross-Origin Resource Sharing) policy. " +
+        "This polyfill uses the standard `fetch()` API, which is more restrictive than a native browser's XSLT engine. " +
+        "Please check the browser's network console for more details about the failed request."
+      );
       wakeUp(null);
     });
   });
@@ -94,7 +101,7 @@ static xmlDocPtr docLoader(const xmlChar* URI, xmlDictPtr dict, int options,
  * @return A pointer to a new string containing the transformed document, or NULL on error.
  */
 EMSCRIPTEN_KEEPALIVE
-char* transform(const char* xml_content, const char* xslt_content, const char** params) {
+char* transform(const char* xml_content, int xml_len, const char* xslt_content, int xslt_len, const char** params) {
     xmlDocPtr xml_doc = NULL;
     xmlDocPtr xslt_doc = NULL;
     xsltStylesheetPtr xslt_sheet = NULL;
@@ -109,14 +116,14 @@ char* transform(const char* xml_content, const char* xslt_content, const char** 
     // Set our custom document loader.
     xsltSetLoaderFunc(docLoader);
 
-    // Parse the input strings into libxml2 documents.
-    xml_doc = xmlParseDoc((const xmlChar*)xml_content);
+    // Parse the input strings into libxml2 documents using their known length.
+    xml_doc = xmlParseMemory(xml_content, xml_len);
     if (xml_doc == NULL) {
         printf("XSLT Transformation Error: Failed to parse XML document.\n");
         goto cleanup;
     }
 
-    xslt_doc = xmlParseDoc((const xmlChar*)xslt_content);
+    xslt_doc = xmlParseMemory(xslt_content, xslt_len);
     if (xslt_doc == NULL) {
         printf("XSLT Transformation Error: Failed to parse XSLT document.\n");
         goto cleanup;
