@@ -19,12 +19,11 @@ export NOCONFIGURE=1 # We'll run it with emconfigure instead
 ./autogen.sh
 
 # Configure with Emscripten's emconfigure wrapper
-export CC="emcc -s ASYNCIFY"
-export LDFLAGS="-s ASYNCIFY"
+export CC="emcc -Os -s ASYNCIFY"
+export LDFLAGS="-Os -s ASYNCIFY"
 emconfigure ./configure \
     --host=wasm32-unknown-emscripten \
     --prefix="${XML2_INSTALL_DIR}" \
-    --with-minimum \
     --with-output \
     --with-writer \
     --with-html \
@@ -65,8 +64,8 @@ cd "${BASE_DIR}/src/libxslt"
 export PKG_CONFIG_PATH="${XML2_INSTALL_DIR}/lib/pkgconfig"
 
 # Configure with emconfigure
-export CC="emcc -s ASYNCIFY"
-export LDFLAGS="-s ASYNCIFY"
+export CC="emcc -Os -s ASYNCIFY"
+export LDFLAGS="-Os -s ASYNCIFY"
 emconfigure ./configure \
     --host=wasm32-unknown-emscripten \
     --prefix="${XSLT_INSTALL_DIR}" \

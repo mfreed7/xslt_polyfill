@@ -19,12 +19,14 @@ OUT_FILE="${BUILD_DIR}/xslt-wasm.js"
 EMCC_OPT_LEVEL="-Os"
 EMCC_ASSERTIONS="-s ASSERTIONS=0"
 EMCC_ASYNCIFY_DEBUG=""
+EMCC_DEBUG_FLAGS=""
 
 if [ "$BUILD_MODE" == "debug" ]; then
   OUT_FILE="${BUILD_DIR}/xslt-wasm-debug.js"
   EMCC_OPT_LEVEL="-O0"
   EMCC_ASSERTIONS="-s ASSERTIONS=2"
   EMCC_ASYNCIFY_DEBUG="-s ASYNCIFY_DEBUG=1"
+  EMCC_DEBUG_FLAGS="-gsource-map"
   echo "--- Building in DEBUG mode ---"
 else
   echo "--- Building in RELEASE mode (default) ---"
@@ -47,7 +49,7 @@ fi
 CFLAGS=$(pkg-config --cflags libxml-2.0 libxslt)
 LIBS=$(pkg-config --libs libxml-2.0 libxslt)
 
-emcc ${EMCC_OPT_LEVEL} -gsource-map \
+emcc ${EMCC_OPT_LEVEL} ${EMCC_DEBUG_FLAGS} \
   src/transform.c \
   -o ${OUT_FILE} \
   ${CFLAGS} \
