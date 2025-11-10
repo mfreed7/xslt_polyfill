@@ -25,7 +25,11 @@
   });
   window.xsltUsePolyfillAlways = ('xsltUsePolyfillAlways' in window) ? window.xsltUsePolyfillAlways : false;
   window.xsltDontAutoloadXmlDocs = ('xsltDontAutoloadXmlDocs' in window) ? window.xsltDontAutoloadXmlDocs : false;
-  const nativeSupported = 'XSLTProcessor' in window;
+  let nativeSupported = false;
+  try {
+    new XSLTProcessor();
+    nativeSupported = true;
+  } catch {}
   const polyfillWillLoad = !nativeSupported || window.xsltUsePolyfillAlways;
   if (polyfillWillLoad) {
     // The polyfill
