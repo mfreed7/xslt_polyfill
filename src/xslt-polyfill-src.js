@@ -25,11 +25,14 @@
   });
   window.xsltUsePolyfillAlways = ('xsltUsePolyfillAlways' in window) ? window.xsltUsePolyfillAlways : false;
   window.xsltDontAutoloadXmlDocs = ('xsltDontAutoloadXmlDocs' in window) ? window.xsltDontAutoloadXmlDocs : false;
-  let nativeSupported = false;
-  try {
-    new XSLTProcessor();
-    nativeSupported = true;
-  } catch {}
+  const nativeSupported = ('XSLTProcessor' in window) && window.XSLTProcessor.toString().includes('native code');
+  if (nativeSupported) {
+    try {
+      new XSLTProcessor();
+    } catch {
+      nativeSupported = false;
+    }
+  }
   const polyfillWillLoad = !nativeSupported || window.xsltUsePolyfillAlways;
   if (polyfillWillLoad) {
     // The polyfill
