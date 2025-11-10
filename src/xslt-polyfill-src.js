@@ -25,7 +25,7 @@
   });
   window.xsltUsePolyfillAlways = ('xsltUsePolyfillAlways' in window) ? window.xsltUsePolyfillAlways : false;
   window.xsltDontAutoloadXmlDocs = ('xsltDontAutoloadXmlDocs' in window) ? window.xsltDontAutoloadXmlDocs : false;
-  const nativeSupported = ('XSLTProcessor' in window) && window.XSLTProcessor.toString().includes('native code');
+  let nativeSupported = ('XSLTProcessor' in window) && window.XSLTProcessor.toString().includes('native code');
   if (nativeSupported) {
     try {
       new XSLTProcessor();
