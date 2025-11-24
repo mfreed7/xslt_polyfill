@@ -104,14 +104,35 @@ There are a few demos in the `test/` directory:
   `demo.xsl`, load that file, and then process them together, replacing the document.
   \[[Run](https://mfreed7.github.io/xslt_polyfill/test/demo_html.html)\]
 
-## Building
-
-The build assumes several tools such as `emscripten` and `make`. But the entire
-polyfill can be built with one command:
-
+## Contributing
+### Dependencies
+Make sure you checkout the repo including it's git submodules:
 ```
-$ ./build.sh
+$ git clone --recursive https://github.com/mfreed7/xslt_polyfill.git
 ```
+
+The build assumes several tools such as `emscripten` and `make`.
+
+The package mangler/compressor `terser` is also assumed. If you don't have it installed, you can
+install it via npm:
+```shell
+npm install terser -g
+```
+
+### Building
+Given the dependencies listed above, the polyfill can be built with one command:
+```shell
+./build.sh
+```
+
+Once native code is built, you can change js code and re-run only last step, which is the JS minification step with:
+```shell
+./combine_and_minify.sh
+```
+
+This will produce `xslt-polyfill.min.js`, which is the minified polyfill
+suitable for production use.
+
 
 ## Improvements / Bugs
 

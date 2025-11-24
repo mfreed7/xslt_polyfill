@@ -347,7 +347,8 @@
 
   function replaceCurrentXMLDoc() {
     const xml = new XMLSerializer().serializeToString(document);
-    loadXmlContentWithXsltWhenReady(xml, window.location.href).catch(
+    const xmlBytes = new TextEncoder().encode(xml);
+    loadXmlContentWithXsltFromBytesWhenReady(xmlBytes, window.location.href).catch(
       (err) => {
         replaceDoc(`Error displaying XML file: ${err.message || err.toString()}`);
       }
