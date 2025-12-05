@@ -38,6 +38,77 @@
     // The polyfill
     const promiseName = 'xsltPolyfillReady';
 
+    async function loadDoc(fn, cache) {
+      const res = await fetch(fn, {cache: cache});
+      if (!res.ok) {
+        return null;
+      }
+      const xmltext = await res.text();
+      return (new DOMParser()).parseFromString(xmltext, 'text/xml');
+    }
+
+    function isDuplicateParam(nodeToImport, xsltsheet, xslns) {
+      if (nodeToImport.nodeName !== 'xsl:param') {
+        return false;
+      }
+      const name = nodeToImport.getAttribute('name');
+      const params = xsltsheet.documentElement.getElementsByTagNameNS(xslns, 'param');
+      for (const param of params) {
+        if (param.parentElement === xsltsheet.documentElement && param.getAttribute('name') === name) {
+          return true;
+        }
+      }
+      return false;
+    }
+
+    // Recursively fetches and inlines <xsl:import> statements within an XSLT document.
+    // This function is destructive and will modify the provided `xsltsheet` document.
+    // The `xsltsheet` parameter is the XSLT document to process, and `relurl` is the
+    // base URL for resolving relative import paths.
+    // Returns the modified XSLT document with all imports inlined.
+    async function compileImports(xsltsheet, relurl) {
+      const xslns = 'http://www.w3.org/1999/XSL/Transform';
+      const imports = Array.from(xsltsheet.getElementsByTagNameNS(xslns, 'import'));
+      if (!imports.length) {
+        return xsltsheet;
+      }
+      if (!relurl) {
+        relurl = window.location.href;
+      }
+      for (const importElement of imports) {
+        const href = (new URL(importElement.getAttribute('href'), relurl)).href;
+        const importedDoc = await loadDoc(href, 'default');
+        if (!importedDoc || !importedDoc.documentElement) {
+            continue;
+        }
+        while (importedDoc.documentElement.firstChild) {
+          const nodeToImport = importedDoc.documentElement.firstChild;
+          if (isDuplicateParam(nodeToImport, xsltsheet, xslns)) {
+            nodeToImport.remove();
+            continue;
+          }
+          if (nodeToImport.nodeName === 'xsl:import') {
+            const newhref = (new URL(nodeToImport.getAttribute('href'), href)).href;
+            const nestedImportedDoc = await loadDoc(newhref, 'default');
+            if (!nestedImportedDoc) {
+                nodeToImport.remove();
+                continue;
+            }
+            const embed = await compileImports(nestedImportedDoc, newhref);
+            while (embed.documentElement.firstChild) {
+              importElement.before(embed.documentElement.firstChild);
+            }
+            nodeToImport.remove();
+            continue;
+          }
+
+          importElement.before(nodeToImport);
+        }
+        importElement.remove();
+      }
+      return xsltsheet;
+    }
+
     /**
      * Manages memory to call the WASM transform function using standard Web APIs
      * instead of relying on non-standard Emscripten runtime methods.
@@ -156,8 +227,10 @@
 
 
     class XSLTProcessor {
-      #stylesheetText = null;
+      #stylesheet = null;
       #parameters = new Map();
+      #compiledStylesheetPromise = null;
+      #compiledStylesheetText = null;
 
       constructor() {}
       isPolyfill() {
@@ -165,15 +238,33 @@
       }
 
       importStylesheet(stylesheet) {
-        this.#stylesheetText = (new XMLSerializer()).serializeToString(stylesheet);
+        this.#stylesheet = stylesheet;
+        this.#compiledStylesheetText = null;
+        this.#compiledStylesheetPromise = this.#compileStylesheet();
+      }
+
+      async #compileStylesheet() {
+        if (!this.#stylesheet) {
+          throw new Error("XSLTProcessor: Stylesheet not imported.");
+        }
+        const baseUrl = this.#stylesheet.baseURI || window.location.href;
+        // We need to clone the node because compileImports is destructive.
+        const stylesheetClone = this.#stylesheet.cloneNode(true);
+        const compiledStylesheet = await compileImports(stylesheetClone, baseUrl);
+        this.#compiledStylesheetText = (new XMLSerializer()).serializeToString(compiledStylesheet);
       }
 
       async transformToText(source) {
-        if (!this.#stylesheetText) {
+        if (!this.#stylesheet) {
             throw new Error("XSLTProcessor: Stylesheet not imported.");
         }
+        // #compiledStylesheetPromise is used to prevent a race condition where
+        // multiple concurrent calls to transformToText would cause the stylesheet
+        // to be compiled multiple times.
+        await this.#compiledStylesheetPromise;
+
         const sourceXml = (new XMLSerializer()).serializeToString(source);
-        return await transformXmlWithXslt(sourceXml, this.#stylesheetText, this.#parameters);
+        return await transformXmlWithXslt(sourceXml, this.#compiledStylesheetText, this.#parameters);
       }
 
       async transformToDocument(source) {
@@ -207,7 +298,9 @@
       }
 
       reset() {
-        this.#stylesheetText = null;
+        this.#stylesheet = null;
+        this.#compiledStylesheetPromise = null;
+        this.#compiledStylesheetText = null;
         this.clearParameters();
       }
     }
@@ -283,19 +376,23 @@
   
       // Fetch the XSLT file, resolving its path relative to the XML file's URL.
       const xsltUrl = new URL(xsltPath, xmlUrl);
-      const xsltResponse = await fetch(xsltUrl.href);
-      if (!xsltResponse.ok) {
-        return replaceDoc(`Failed to fetch XSLT file: ${xsltResponse.statusText}`);
+      const xsltDoc = await loadDoc(xsltUrl.href, 'default');
+      if (!xsltDoc) {
+        return replaceDoc(`Failed to fetch XSLT file: ${xsltUrl.href}`);
       }
-      const xsltBytes = new Uint8Array(await xsltResponse.arrayBuffer());
-  
-          // Process XML/XSLT and replace the document.
-          let resultHtml;
-          try {
-            resultHtml = await transformXmlWithXslt(xmlBytes, xsltBytes, null);
-          } catch (e) {
-            return replaceDoc(`Error processing XML/XSLT: ${e}`);
-          }
+
+      // We need to clone the node because compileImports is destructive.
+      const xsltDocClone = xsltDoc.cloneNode(true);
+      const compiledXsltDoc = await compileImports(xsltDocClone, xsltUrl.href);
+      const compiledXsltText = new XMLSerializer().serializeToString(compiledXsltDoc);
+
+      // Process XML/XSLT and replace the document.
+      let resultHtml;
+      try {
+        resultHtml = await transformXmlWithXslt(xmlBytes, compiledXsltText, null);
+      } catch (e) {
+        return replaceDoc(`Error processing XML/XSLT: ${e}`);
+      }
       
           // Replace the document with the result
           const parser = new DOMParser();
