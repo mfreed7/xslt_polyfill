@@ -109,15 +109,7 @@
       return xsltsheet;
     }
 
-    /**
-     * Manages memory to call the WASM transform function using standard Web APIs
-     * instead of relying on non-standard Emscripten runtime methods.
-     * @param {string} xmlContent
-     * @param {string} xsltContent
-     * @param {Map<string, string>} parameters
-     * @returns {string} The transformed string result.
-     */
-    async function transformXmlWithXslt(xmlContent, xsltContent, parameters) {
+async function transformXmlWithXslt(xmlContent, xsltContent, parameters, xsltUrl) {
       if (!wasm_transform || !WasmModule) {
         throw new Error(`Polyfill XSLT WASM module not yet loaded. Please wait for the ${promiseName} promise to resolve.`);
       }
@@ -128,6 +120,7 @@
       let xmlPtr = 0;
       let xsltPtr = 0;
       let paramsPtr = 0;
+      let xsltUrlPtr = 0;
       const paramStringPtrs = [];
 
       // Helper to write byte arrays to WASM memory manually.
@@ -142,6 +135,9 @@
 
       // Helper to write JS strings to WASM memory manually.
       const writeStringToHeap = (str) => {
+          if (str === null || str === undefined || typeof str !== 'string') {
+            throw new Error(`Cannot write non-string value to WASM heap: ${str}`);
+          }
           const encodedStr = textEncoder.encode(str);
           const ptr = WasmModule._malloc(encodedStr.length + 1);
           if (!ptr) throw new Error(`WASM malloc failed for string: ${str.substring(0, 50)}...`);
@@ -200,9 +196,10 @@
           const xsltBytes = (xsltContent instanceof Uint8Array) ? xsltContent : textEncoder.encode(xsltContent);
           xmlPtr = writeBytesToHeap(xmlBytes);
           xsltPtr = writeBytesToHeap(xsltBytes);
+          xsltUrlPtr = writeStringToHeap(xsltUrl);
 
           // 4. Call the C function with pointers to the data in WASM memory.
-          const resultPtr = await wasm_transform(xmlPtr, xmlBytes.byteLength, xsltPtr, xsltBytes.byteLength, paramsPtr);
+          const resultPtr = await wasm_transform(xmlPtr, xmlBytes.byteLength, xsltPtr, xsltBytes.byteLength, paramsPtr, xsltUrlPtr);
 
           if (!resultPtr) {
               throw new Error(`XSLT Transformation failed. See console for details.`);
@@ -220,6 +217,7 @@
           // 7. Clean up all allocated memory to prevent memory leaks in the WASM heap.
           if (xmlPtr) wasm_free(xmlPtr);
           if (xsltPtr) wasm_free(xsltPtr);
+          if (xsltUrlPtr) wasm_free(xsltUrlPtr);
           paramStringPtrs.forEach(ptr => wasm_free(ptr));
           if (paramsPtr) wasm_free(paramsPtr);
       }
@@ -231,6 +229,7 @@
       #parameters = new Map();
       #compiledStylesheetPromise = null;
       #compiledStylesheetText = null;
+      #stylesheetBaseUrl = null;
 
       constructor() {}
       isPolyfill() {
@@ -240,6 +239,7 @@
       importStylesheet(stylesheet) {
         this.#stylesheet = stylesheet;
         this.#compiledStylesheetText = null;
+        this.#stylesheetBaseUrl = stylesheet.baseURI || window.location.href;
         this.#compiledStylesheetPromise = this.#compileStylesheet();
       }
 
@@ -247,10 +247,9 @@
         if (!this.#stylesheet) {
           throw new Error("XSLTProcessor: Stylesheet not imported.");
         }
-        const baseUrl = this.#stylesheet.baseURI || window.location.href;
         // We need to clone the node because compileImports is destructive.
         const stylesheetClone = this.#stylesheet.cloneNode(true);
-        const compiledStylesheet = await compileImports(stylesheetClone, baseUrl);
+        const compiledStylesheet = await compileImports(stylesheetClone, this.#stylesheetBaseUrl);
         this.#compiledStylesheetText = (new XMLSerializer()).serializeToString(compiledStylesheet);
       }
 
@@ -264,7 +263,7 @@
         await this.#compiledStylesheetPromise;
 
         const sourceXml = (new XMLSerializer()).serializeToString(source);
-        return await transformXmlWithXslt(sourceXml, this.#compiledStylesheetText, this.#parameters);
+        return await transformXmlWithXslt(sourceXml, this.#compiledStylesheetText, this.#parameters, this.#stylesheetBaseUrl);
       }
 
       async transformToDocument(source) {
@@ -301,6 +300,7 @@
         this.#stylesheet = null;
         this.#compiledStylesheetPromise = null;
         this.#compiledStylesheetText = null;
+        this.#stylesheetBaseUrl = null;
         this.clearParameters();
       }
     }
@@ -321,7 +321,7 @@
     .then(Module => {
         WasmModule = Module;
         // Use cwrap to create a JS function that returns a Promise.
-        wasm_transform = Module.cwrap('transform', 'number', ['number', 'number', 'number', 'number', 'number'], { async: true });
+        wasm_transform = Module.cwrap('transform', 'number', ['number', 'number', 'number', 'number', 'number', 'number'], { async: true });
         wasm_free = Module._free;
 
         // Tell people we're ready.
@@ -389,7 +389,7 @@
       // Process XML/XSLT and replace the document.
       let resultHtml;
       try {
-        resultHtml = await transformXmlWithXslt(xmlBytes, compiledXsltText, null);
+        resultHtml = await transformXmlWithXslt(xmlBytes, compiledXsltText, null, xsltUrl.href);
       } catch (e) {
         return replaceDoc(`Error processing XML/XSLT: ${e}`);
       }

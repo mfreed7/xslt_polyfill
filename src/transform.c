@@ -101,7 +101,7 @@ static xmlDocPtr docLoader(const xmlChar* URI, xmlDictPtr dict, int options,
  * @return A pointer to a new string containing the transformed document, or NULL on error.
  */
 EMSCRIPTEN_KEEPALIVE
-char* transform(const char* xml_content, int xml_len, const char* xslt_content, int xslt_len, const char** params) {
+char* transform(const char* xml_content, int xml_len, const char* xslt_content, int xslt_len, const char** params, const char* xslt_url) {
     xmlDocPtr xml_doc = NULL;
     xmlDocPtr xslt_doc = NULL;
     xsltStylesheetPtr xslt_sheet = NULL;
@@ -123,7 +123,7 @@ char* transform(const char* xml_content, int xml_len, const char* xslt_content, 
         goto cleanup;
     }
 
-    xslt_doc = xmlParseMemory(xslt_content, xslt_len);
+    xslt_doc = xmlReadMemory(xslt_content, xslt_len, xslt_url, NULL, 0);
     if (xslt_doc == NULL) {
         printf("XSLT Transformation Error: Failed to parse XSLT document.\n");
         goto cleanup;
