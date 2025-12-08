@@ -1,0 +1,8 @@
+<?xml version="1.0"?>
+<?xml-stylesheet type="text/xsl" href="demo2.xsl" ?>
+<page>
+ <script src="../xslt-polyfill.min.js" xmlns="http://www.w3.org/1999/xhtml"></script>
+ <message>
+  Hello World.
+ </message>
+</page>

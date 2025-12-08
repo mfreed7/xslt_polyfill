@@ -37,8 +37,8 @@ fi
 export PKG_CONFIG_PATH="${XML2_INSTALL_DIR}/lib/pkgconfig:${XSLT_INSTALL_DIR}/lib/pkgconfig"
 
 # --- Verify that pkg-config can find the libraries ---
-if ! pkg-config --exists libxml-2.0 || ! pkg-config --exists libxslt; then
-    echo "Error: pkg-config could not find libxml-2.0 or libxslt." >&2
+if ! pkg-config --exists libxml-2.0 || ! pkg-config --exists libxslt || ! pkg-config --exists libexslt; then
+    echo "Error: pkg-config could not find libxml-2.0, libxslt, or libexslt." >&2
     echo "This means the libraries were not built and installed correctly into the output directory." >&2
     echo "PKG_CONFIG_PATH is: ${PKG_CONFIG_PATH}" >&2
     exit 1
@@ -46,8 +46,8 @@ fi
 
 # Get compiler and linker flags directly from pkg-config
 # This is the robust way to find headers and libraries
-CFLAGS=$(pkg-config --cflags libxml-2.0 libxslt)
-LIBS=$(pkg-config --libs libxml-2.0 libxslt)
+CFLAGS=$(pkg-config --cflags libxml-2.0 libxslt libexslt)
+LIBS=$(pkg-config --libs libxml-2.0 libxslt libexslt)
 
 emcc ${EMCC_OPT_LEVEL} ${EMCC_DEBUG_FLAGS} \
   src/transform.c \

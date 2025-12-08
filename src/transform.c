@@ -13,6 +13,7 @@
 #include <libxslt/xsltutils.h>
 #include <libxslt/transform.h>
 #include <libxslt/security.h>
+#include <libexslt/exslt.h>
 
 // Forward declaration for our JS fetch function.
 const char* fetch_and_load_document(const char* url);
@@ -112,6 +113,9 @@ char* transform(const char* xml_content, int xml_len, const char* xslt_content, 
 
     // Initialize the XML library. This is important for thread safety.
     xmlInitParser();
+
+    // Enable EXSLT functions.
+    exsltRegisterAll();
 
     // Set our custom document loader.
     xsltSetLoaderFunc(docLoader);
