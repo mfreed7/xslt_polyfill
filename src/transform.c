@@ -127,7 +127,7 @@ char* transform(const char* xml_content, int xml_len, const char* xslt_content, 
         goto cleanup;
     }
 
-    xslt_doc = xmlReadMemory(xslt_content, xslt_len, xslt_url, NULL, 0);
+    xslt_doc = xmlReadMemory(xslt_content, xslt_len, xslt_url, "UTF-8", XSLT_PARSE_OPTIONS | XML_PARSE_HUGE);
     if (xslt_doc == NULL) {
         printf("XSLT Transformation Error: Failed to parse XSLT document.\n");
         goto cleanup;

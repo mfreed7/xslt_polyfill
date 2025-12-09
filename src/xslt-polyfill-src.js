@@ -339,7 +339,7 @@ async function transformXmlWithXslt(xmlContent, xsltContent, parameters, xsltUrl
       url = absoluteUrl(url);
       const xmlResponse = await fetch(url);
       if (!xmlResponse.ok) {
-        return replaceDoc(`Failed to fetch XML file: ${xmlResponse.statusText}`);
+        return showError(`Failed to fetch XML file: ${xmlResponse.statusText}`);
       }
       const xmlBytes = new Uint8Array(await xmlResponse.arrayBuffer());
       return loadXmlWithXsltFromBytes(xmlBytes, url);
@@ -378,7 +378,7 @@ async function transformXmlWithXslt(xmlContent, xsltContent, parameters, xsltUrl
       const xsltUrl = new URL(xsltPath, xmlUrl);
       const xsltDoc = await loadDoc(xsltUrl.href, 'default');
       if (!xsltDoc) {
-        return replaceDoc(`Failed to fetch XSLT file: ${xsltUrl.href}`);
+        return showError(`Failed to fetch XSLT file: ${xsltUrl.href}`);
       }
 
       // We need to clone the node because compileImports is destructive.
@@ -391,18 +391,12 @@ async function transformXmlWithXslt(xmlContent, xsltContent, parameters, xsltUrl
       try {
         resultHtml = await transformXmlWithXslt(xmlBytes, compiledXsltText, null, xsltUrl.href);
       } catch (e) {
-        return replaceDoc(`Error processing XML/XSLT: ${e}`);
+        return showError(`Error processing XML/XSLT: ${e}`);
       }
       
-          // Replace the document with the result
-          const parser = new DOMParser();
-          const doc = parser.parseFromString(resultHtml, 'text/html');
-          const fragment = document.createDocumentFragment();
-          if (doc.documentElement) {
-            fragment.appendChild(doc.documentElement);
-          }
-          replaceDoc(fragment);    }
-    
+      // Replace the document with the result
+      replaceDoc(resultHtml);
+    }
     function loadXmlContentWithXsltFromBytesWhenReady(xmlBytes, xmlUrl) {
       return xsltPolyfillReady().then(() => loadXmlWithXsltFromBytes(xmlBytes, xmlUrl));
     }
@@ -412,34 +406,50 @@ async function transformXmlWithXslt(xmlContent, xsltContent, parameters, xsltUrl
     window.loadXmlContentWithXsltFromBytesWhenReady = loadXmlContentWithXsltFromBytesWhenReady;
   } // if (polyfillWillLoad)
 
-  // Utility functions that get exported even if native XSLT is supported:
+  // Replace the current document with the provided error message.
+  function showError(errorMessage) {
+    document.documentElement.innerHTML = errorMessage;
+    throw new Error(errorMessage);
+  }
 
-  function replaceDoc(newContent) {
-    // This is a destructive action, replacing the current page.
-    if (document instanceof XMLDocument) {
-      const htmlRoot = document.createElementNS(
-        "http://www.w3.org/1999/xhtml",
-        "html"
-      );
-      htmlRoot.append(newContent);
-      document.documentElement.replaceWith(htmlRoot);
-    } else if (newContent instanceof DocumentFragment) {
-      const head = newContent.querySelector('head');
-      const headNodes = head?.childNodes ?? [];
-      document.head.replaceChildren(...headNodes);
-      const body = newContent.querySelector('body');
-      const bodyNodes = body?.childNodes ?? newContent;
-      document.body.replaceChildren(...bodyNodes);
-      // The html element could have attributes - copy them.
-      const html = newContent.querySelector('html');
-      if (html) {
-        for (const attr of html.attributes) {
-          document.documentElement.setAttribute(attr.name, attr.value);
-        }
-      }
-    } else {
-      document.documentElement.innerHTML = newContent;
+  // Replace the current document with the provided HTML.
+  function replaceDoc(newHTML) {
+    if (typeof newHTML !== 'string' ) {
+      return showError('newHTML should be a string');
     }
+    if (document instanceof XMLDocument) {
+      const htmlRoot = document.createElementNS("http://www.w3.org/1999/xhtml","html");
+      document.documentElement.replaceWith(htmlRoot);
+      unsafeInsertTrustedHtmlWithScripts(htmlRoot, newHTML);
+    } else if (document instanceof HTMLDocument) {
+      unsafeInsertTrustedHtmlWithScripts(document.documentElement, newHTML);
+    } else {
+      return showError('Unknown document type');
+    }
+  }
+
+  function unsafeInsertTrustedHtmlWithScripts(targetElement, htmlString) {
+    // First parse the document and move content to a fragment.
+    const parsedDoc = (new DOMParser()).parseFromString(htmlString, 'text/html');
+    const fragment = document.createDocumentFragment();
+    fragment.append(...parsedDoc.documentElement.childNodes);
+    // Scripts need to be re-created, so they will execute:
+    const scripts = fragment.querySelectorAll('script');
+    scripts.forEach((oldScript) => {
+      const newScript = document.createElementNS('http://www.w3.org/1999/xhtml','script');
+      Array.from(oldScript.attributes).forEach((attr) => {
+        newScript.setAttribute(attr.name, attr.value);
+      });
+      newScript.textContent = oldScript.textContent;
+      oldScript.parentNode.replaceChild(newScript, oldScript);
+    });
+    // The html element could have attributes - copy them.
+    if (targetElement instanceof HTMLHtmlElement) {
+      for (const attr of parsedDoc.documentElement.attributes) {
+        targetElement.setAttribute(attr.name, attr.value);
+      }
+    }
+    targetElement.replaceChildren(fragment);
   }
 
   function replaceCurrentXMLDoc() {
@@ -447,7 +457,7 @@ async function transformXmlWithXslt(xmlContent, xsltContent, parameters, xsltUrl
     const xmlBytes = new TextEncoder().encode(xml);
     loadXmlContentWithXsltFromBytesWhenReady(xmlBytes, window.location.href).catch(
       (err) => {
-        replaceDoc(`Error displaying XML file: ${err.message || err.toString()}`);
+        showError(`Error displaying XML file: ${err.message || err.toString()}`);
       }
     );
   }
