@@ -420,15 +420,15 @@ async function transformXmlWithXslt(xmlContent, xsltContent, parameters, xsltUrl
     if (document instanceof XMLDocument) {
       const htmlRoot = document.createElementNS("http://www.w3.org/1999/xhtml","html");
       document.documentElement.replaceWith(htmlRoot);
-      unsafeInsertTrustedHtmlWithScripts(htmlRoot, newHTML);
+      unsafeReplaceDocumentWithHtml(htmlRoot, newHTML);
     } else if (document instanceof HTMLDocument) {
-      unsafeInsertTrustedHtmlWithScripts(document.documentElement, newHTML);
+      unsafeReplaceDocumentWithHtml(document.documentElement, newHTML);
     } else {
       return showError('Unknown document type');
     }
   }
 
-  function unsafeInsertTrustedHtmlWithScripts(targetElement, htmlString) {
+  function unsafeReplaceDocumentWithHtml(targetElement, htmlString) {
     // First parse the document and move content to a fragment.
     const parsedDoc = (new DOMParser()).parseFromString(htmlString, 'text/html');
     const fragment = document.createDocumentFragment();
@@ -450,6 +450,9 @@ async function transformXmlWithXslt(xmlContent, xsltContent, parameters, xsltUrl
       }
     }
     targetElement.replaceChildren(fragment);
+    // Since all of the scripts above will run after the document load, we
+    // fire a synthetic one, to make sure `addEventListener('load')` works.
+    window.dispatchEvent(new CustomEvent('load', {bubbles: false, cancelable: false}));
   }
 
   function replaceCurrentXMLDoc() {
