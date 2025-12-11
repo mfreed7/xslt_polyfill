@@ -53,6 +53,7 @@ so that code like this will also work:
 
 ```html
 <!DOCTYPE html>
+<meta charset="utf-8">
 <script src="../xslt-polyfill.min.js"></script>
 <script>
 const xsltProcessor = new XSLTProcessor();
@@ -75,11 +76,20 @@ Note that as of now, there are a few things that don't work perfectly:
    Because XHTML always renders in no-quirks mode, if the transformed (HTML)
    output content *doesn't* include a `<!DOCTYPE>`, then it ordinarily would
    have rendered in quirks mode, which is different.
+ - Scripts in the transformed output must be "copied" to fresh `<script>`
+   elements so that they execute. This means the behavior will be slightly
+   different from native: all (legacy synchronous) scripts will see the full
+   DOM, not just the DOM "above" the script. Also, a synthetic `load` event
+   will be fired after all scripts are inserted, since no trusted load will be
+   fired either.
  - Since the polyfill uses the Fetch API to request any additional resources
    linked via `<xsl:include>` or `<xsl:import>` in the XML source, these
    requests are subject to CORS, which might block the request. The browser-
    native XSLT processor is able to load these resources, despite the CORS
    violation, leading to a behavior difference.
+ - The Wasm code is embedded into a single file, for ease-of-use and file size,
+   via the emcc SINGLE_FILE option. This means that the encoding must be UTF-8
+   or that resource will be incorrectly decoded.
  - There are likely opportunities for performance improvement. In particular,
    there are a few places where the content takes extra passes through a
    parser, and those could likely be streamlined.
