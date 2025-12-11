@@ -53,8 +53,7 @@ so that code like this will also work:
 
 ```html
 <!DOCTYPE html>
-<meta charset="utf-8">
-<script src="../xslt-polyfill.min.js"></script>
+<script src="xslt-polyfill.min.js" charset="utf-8"></script>
 <script>
 const xsltProcessor = new XSLTProcessor();
 xsltProcessor.importStylesheet(xsltDoc);
