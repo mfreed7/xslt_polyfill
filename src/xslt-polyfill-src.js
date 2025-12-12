@@ -109,7 +109,7 @@
       return xsltsheet;
     }
 
-    async function transformXmlWithXslt(xmlContent, xsltContent, parameters, xsltUrl) {
+    function transformXmlWithXslt(xmlContent, xsltContent, parameters, xsltUrl) {
       if (!wasm_transform || !WasmModule) {
         throw new Error(`Polyfill XSLT WASM module not yet loaded. Please wait for the ${promiseName} promise to resolve.`);
       }
@@ -199,7 +199,7 @@
           xsltUrlPtr = writeStringToHeap(xsltUrl);
 
           // 4. Call the C function with pointers to the data in WASM memory.
-          const resultPtr = await wasm_transform(xmlPtr, xmlBytes.byteLength, xsltPtr, xsltBytes.byteLength, paramsPtr, xsltUrlPtr);
+          const resultPtr = wasm_transform(xmlPtr, xmlBytes.byteLength, xsltPtr, xsltBytes.byteLength, paramsPtr, xsltUrlPtr);
 
           if (!resultPtr) {
               throw new Error(`XSLT Transformation failed. See console for details.`);
@@ -225,10 +225,8 @@
 
 
     class XSLTProcessor {
-      #stylesheet = null;
+      #stylesheetText = null;
       #parameters = new Map();
-      #compiledStylesheetPromise = null;
-      #compiledStylesheetText = null;
       #stylesheetBaseUrl = null;
 
       constructor() {}
@@ -237,43 +235,26 @@
       }
 
       importStylesheet(stylesheet) {
-        this.#stylesheet = stylesheet;
-        this.#compiledStylesheetText = null;
+        this.#stylesheetText = (new XMLSerializer()).serializeToString(stylesheet);
         this.#stylesheetBaseUrl = stylesheet.baseURI || window.location.href;
-        this.#compiledStylesheetPromise = this.#compileStylesheet();
       }
 
-      async #compileStylesheet() {
-        if (!this.#stylesheet) {
-          throw new Error("XSLTProcessor: Stylesheet not imported.");
-        }
-        // We need to clone the node because compileImports is destructive.
-        const stylesheetClone = this.#stylesheet.cloneNode(true);
-        const compiledStylesheet = await compileImports(stylesheetClone, this.#stylesheetBaseUrl);
-        this.#compiledStylesheetText = (new XMLSerializer()).serializeToString(compiledStylesheet);
-      }
-
-      async transformToText(source) {
-        if (!this.#stylesheet) {
+      transformToText(source) {
+        if (!this.#stylesheetText) {
             throw new Error("XSLTProcessor: Stylesheet not imported.");
         }
-        // #compiledStylesheetPromise is used to prevent a race condition where
-        // multiple concurrent calls to transformToText would cause the stylesheet
-        // to be compiled multiple times.
-        await this.#compiledStylesheetPromise;
-
         const sourceXml = (new XMLSerializer()).serializeToString(source);
-        return await transformXmlWithXslt(sourceXml, this.#compiledStylesheetText, this.#parameters, this.#stylesheetBaseUrl);
+        return transformXmlWithXslt(sourceXml, this.#stylesheetText, this.#parameters, this.#stylesheetBaseUrl);
       }
 
-      async transformToDocument(source) {
-        const output = await this.transformToText(source);
+      transformToDocument(source) {
+        const output = this.transformToText(source);
         // TODO: output MimeType should be detected from xsl:output method.
         return (new DOMParser()).parseFromString(output, 'text/html');
       }
 
-      async transformToFragment(source, document) {
-        const doc = await this.transformToDocument(source);
+      transformToFragment(source, document) {
+        const doc = this.transformToDocument(source);
         const fragment = document.createDocumentFragment();
         fragment.appendChild(doc.documentElement);
         return fragment;
@@ -297,9 +278,7 @@
       }
 
       reset() {
-        this.#stylesheet = null;
-        this.#compiledStylesheetPromise = null;
-        this.#compiledStylesheetText = null;
+        this.#stylesheetText = null;
         this.#stylesheetBaseUrl = null;
         this.clearParameters();
       }
@@ -320,8 +299,7 @@
     createXSLTTransformModule()
     .then(Module => {
         WasmModule = Module;
-        // Use cwrap to create a JS function that returns a Promise.
-        wasm_transform = Module.cwrap('transform', 'number', ['number', 'number', 'number', 'number', 'number', 'number'], { async: true });
+        wasm_transform = Module.cwrap('transform', 'number', ['number', 'number', 'number', 'number', 'number', 'number'], { async: false });
         wasm_free = Module._free;
 
         // Tell people we're ready.
@@ -389,7 +367,7 @@
       // Process XML/XSLT and replace the document.
       let resultHtml;
       try {
-        resultHtml = await transformXmlWithXslt(xmlBytes, compiledXsltText, null, xsltUrl.href);
+        resultHtml = transformXmlWithXslt(xmlBytes, compiledXsltText, null, xsltUrl.href);
       } catch (e) {
         return showError(`Error processing XML/XSLT: ${e}`);
       }
@@ -472,10 +450,10 @@
     throw new Error(errorMessage);
   }
 
-  function replaceCurrentXMLDoc() {
-    const xml = new XMLSerializer().serializeToString(document);
+  function replaceCurrentXMLDoc(doc) {
+    const xml = new XMLSerializer().serializeToString(doc);
     const xmlBytes = new TextEncoder().encode(xml);
-    loadXmlContentWithXsltFromBytesWhenReady(xmlBytes, window.location.href).catch(
+    loadXmlContentWithXsltFromBytesWhenReady(xmlBytes, doc.defaultView.location.href).catch(
       (err) => {
         showError(`Error displaying XML file: ${err.message || err.toString()}`);
       }
@@ -485,10 +463,10 @@
   if (!nativeSupported && document instanceof XMLDocument && !xsltDontAutoloadXmlDocs) {
     if (document.readyState === "loading") {
       document.addEventListener("DOMContentLoaded", () => {
-        replaceCurrentXMLDoc();
+        replaceCurrentXMLDoc(document);
       });
     } else {
-      replaceCurrentXMLDoc();
+      replaceCurrentXMLDoc(document);
     }
   }
 
