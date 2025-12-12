@@ -81,6 +81,11 @@ Note that as of now, there are a few things that don't work perfectly:
    DOM, not just the DOM "above" the script. Also, a synthetic `load` event
    will be fired after all scripts are inserted, since no trusted load will be
    fired either.
+ - Because the transformed HTML content can contain `<script>`'s, and those
+   scripts likely expect the document to be an HTML document, and not the XML
+   document mentioned above, some things need to be monkeypatched by this
+   polyfill. For example, `document.createElement()` is patched so that it
+   creates elements in the XHTML namespace.
  - Since the polyfill uses the Fetch API to request any additional resources
    linked via `<xsl:include>` or `<xsl:import>` in the XML source, these
    requests are subject to CORS, which might block the request. The browser-

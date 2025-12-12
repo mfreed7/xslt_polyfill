@@ -109,7 +109,7 @@
       return xsltsheet;
     }
 
-async function transformXmlWithXslt(xmlContent, xsltContent, parameters, xsltUrl) {
+    async function transformXmlWithXslt(xmlContent, xsltContent, parameters, xsltUrl) {
       if (!wasm_transform || !WasmModule) {
         throw new Error(`Polyfill XSLT WASM module not yet loaded. Please wait for the ${promiseName} promise to resolve.`);
       }
@@ -401,6 +401,66 @@ async function transformXmlWithXslt(xmlContent, xsltContent, parameters, xsltUrl
       return xsltPolyfillReady().then(() => loadXmlWithXsltFromBytes(xmlBytes, xmlUrl));
     }
 
+    // Replace the current document with the provided HTML.
+    function replaceDoc(newHTML) {
+      if (typeof newHTML !== 'string' ) {
+        return showError('newHTML should be a string');
+      }
+      if (document instanceof XMLDocument) {
+        const htmlRoot = document.createElementNS("http://www.w3.org/1999/xhtml","html");
+        document.documentElement.replaceWith(htmlRoot);
+        unsafeReplaceDocumentWithHtml(htmlRoot, newHTML);
+      } else if (document instanceof HTMLDocument) {
+        unsafeReplaceDocumentWithHtml(document.documentElement, newHTML);
+      } else {
+        return showError('Unknown document type');
+      }
+    }
+
+    function unsafeReplaceDocumentWithHtml(targetElement, htmlString) {
+      // First parse the document and move content to a fragment.
+      const parsedDoc = (new DOMParser()).parseFromString(htmlString, 'text/html');
+      const fragment = document.createDocumentFragment();
+      fragment.append(...parsedDoc.documentElement.childNodes);
+      // Scripts need to be re-created, so they will execute:
+      const scripts = fragment.querySelectorAll('script');
+      const textArea = document.createElementNS('http://www.w3.org/1999/xhtml','textarea');
+      scripts.forEach((oldScript) => {
+        const newScript = document.createElementNS('http://www.w3.org/1999/xhtml','script');
+        Array.from(oldScript.attributes).forEach((attr) => {
+          newScript.setAttribute(attr.name, attr.value);
+        });
+        // Use a textarea to decode HTML entities.
+        textArea.innerHTML = oldScript.textContent;
+        newScript.textContent = textArea.value;
+        oldScript.parentNode.replaceChild(newScript, oldScript);
+      });
+      // The html element could have attributes - copy them.
+      if (targetElement instanceof HTMLHtmlElement) {
+        for (const attr of parsedDoc.documentElement.attributes) {
+          targetElement.setAttribute(attr.name, attr.value);
+        }
+      }
+      targetElement.replaceChildren(fragment);
+      // Since all of the scripts above will run after the document load, we
+      // fire a synthetic one, to make sure `addEventListener('load')` works.
+      window.dispatchEvent(new CustomEvent('load', {bubbles: false, cancelable: false}));
+    }
+
+    // If we're polyfilling, we need to patch `document.createElement()`, because
+    // that will create XML elements in the (still) XML document.
+    const _originalCreateElement = document.createElement;
+    document.createElement = function(tagName, options) {
+      if (document instanceof XMLDocument) {
+        const el = document.createElementNS('http://www.w3.org/1999/xhtml', tagName.toLowerCase());
+        if (options && options.is) {
+          el.setAttribute('is', options.is);
+        }
+        return el;
+      }
+      return _originalCreateElement.apply(document, arguments);
+    };
+    
     window.loadXmlWithXsltFromUrl = loadXmlWithXsltFromUrl;
     window.loadXmlUrlWithXsltWhenReady = loadXmlUrlWithXsltWhenReady;
     window.loadXmlContentWithXsltFromBytesWhenReady = loadXmlContentWithXsltFromBytesWhenReady;
@@ -410,52 +470,6 @@ async function transformXmlWithXslt(xmlContent, xsltContent, parameters, xsltUrl
   function showError(errorMessage) {
     document.documentElement.innerHTML = errorMessage;
     throw new Error(errorMessage);
-  }
-
-  // Replace the current document with the provided HTML.
-  function replaceDoc(newHTML) {
-    if (typeof newHTML !== 'string' ) {
-      return showError('newHTML should be a string');
-    }
-    if (document instanceof XMLDocument) {
-      const htmlRoot = document.createElementNS("http://www.w3.org/1999/xhtml","html");
-      document.documentElement.replaceWith(htmlRoot);
-      unsafeReplaceDocumentWithHtml(htmlRoot, newHTML);
-    } else if (document instanceof HTMLDocument) {
-      unsafeReplaceDocumentWithHtml(document.documentElement, newHTML);
-    } else {
-      return showError('Unknown document type');
-    }
-  }
-
-  function unsafeReplaceDocumentWithHtml(targetElement, htmlString) {
-    // First parse the document and move content to a fragment.
-    const parsedDoc = (new DOMParser()).parseFromString(htmlString, 'text/html');
-    const fragment = document.createDocumentFragment();
-    fragment.append(...parsedDoc.documentElement.childNodes);
-    // Scripts need to be re-created, so they will execute:
-    const scripts = fragment.querySelectorAll('script');
-    const textArea = document.createElementNS('http://www.w3.org/1999/xhtml','textarea');
-    scripts.forEach((oldScript) => {
-      const newScript = document.createElementNS('http://www.w3.org/1999/xhtml','script');
-      Array.from(oldScript.attributes).forEach((attr) => {
-        newScript.setAttribute(attr.name, attr.value);
-      });
-      // Use a textarea to decode HTML entities.
-      textArea.innerHTML = oldScript.textContent;
-      newScript.textContent = textArea.value;
-      oldScript.parentNode.replaceChild(newScript, oldScript);
-    });
-    // The html element could have attributes - copy them.
-    if (targetElement instanceof HTMLHtmlElement) {
-      for (const attr of parsedDoc.documentElement.attributes) {
-        targetElement.setAttribute(attr.name, attr.value);
-      }
-    }
-    targetElement.replaceChildren(fragment);
-    // Since all of the scripts above will run after the document load, we
-    // fire a synthetic one, to make sure `addEventListener('load')` works.
-    window.dispatchEvent(new CustomEvent('load', {bubbles: false, cancelable: false}));
   }
 
   function replaceCurrentXMLDoc() {
