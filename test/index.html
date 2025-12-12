@@ -59,6 +59,13 @@
     row.appendChild(outputCell);
     document.getElementById('results').querySelector('tbody').appendChild(row);
   }
+  function assert(cond,msg) {
+    msg = msg || "Error";
+    if (!cond) {
+      document.documentElement.innerHTML = msg;
+      throw new Error(msg);
+    }
+  }
 
   function runTest(testCase, mode) {
     const iframe = document.createElement('iframe');
@@ -83,348 +90,48 @@
     } else if (mode === 'min') {
       scriptInjection =
           '<script src="../xslt-polyfill.min.js" xmlns="http://www.w3.org/1999/xhtml" charset="utf-8"><\/script>';
+    } else {
+      assert(mode === 'native');
     }
-
     content = content.replace('{{SCRIPT_INJECTION_LOCATION}}', scriptInjection);
 
-    if (testCase.setup) {
-      iframe.addEventListener('load', () => {
-        testCase.setup(iframe);
-      });
+    // For polyfill cases, we need to tell the polyfill to transform the doc.
+    if (mode !== 'native') {
+      iframe.addEventListener('load', () => replaceCurrentXMLDoc(iframe.contentDocument));
     }
 
     iframe.srcdoc = content;
     return iframe;
   }
 
+  let nativeSupported = ('XSLTProcessor' in window) && window.XSLTProcessor.toString().includes('native code');
+  if (nativeSupported) {
+    try {
+      new XSLTProcessor();
+    } catch {
+      nativeSupported = false;
+    }
+  }
+  const modeElement = document.getElementById('mode')
   function runTests() {
     document.getElementById('results').querySelector('tbody').innerHTML = '';
-    const mode = document.getElementById('mode').value;
-
-    if (mode === 'native' && typeof window.XSLTProcessor === 'undefined') {
+    const mode = modeElement.value;
+    if (mode === 'native' && !nativeSupported) {
       alert('Native XSLTProcessor not supported by this browser.');
       return;
     }
-
     for (const testCase of testCases) {
       const iframe = runTest(testCase, mode);
       addTestResult(testCase.name, iframe);
     }
   }
 
-  document.getElementById('mode').options[0].disabled = typeof window.XSLTProcessor === 'undefined';
+  if (nativeSupported) {
+    modeElement.options[1].disabled = true;
+    modeElement.options[2].disabled = true;
+  } else {
+    modeElement.options[0].disabled = true;
+    modeElement.selectedIndex = 1;
+  }
   document.getElementById('go').addEventListener('click', runTests);
-
-
-
-  const testCases = [
-    {
-      name: 'Basic Transformation',
-      xml: `
-        <?xml version="1.0"?>
-        <?xml-stylesheet type="text/xsl" href="{{XSL_HREF}}"?>
-        <page>
-          {{SCRIPT_INJECTION_LOCATION}}
-          <message>PASS</message>
-        </page>
-      `,
-      xsl: `
-        <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
-          <xsl:output method="html"/>
-          <xsl:template match="/">
-            <xsl:apply-templates select="/page/message"/>
-          </xsl:template>
-          <xsl:template match="/page/message">
-            <div style="color:green">
-              <xsl:value-of select="."/>
-            </div>
-          </xsl:template>
-        </xsl:stylesheet>
-      `,
-    },
-    {
-      name: 'EXSLT Support',
-      xml: `
-        <?xml version="1.0"?>
-        <?xml-stylesheet type="text/xsl" href="{{XSL_HREF}}"?>
-        <page>
-          {{SCRIPT_INJECTION_LOCATION}}
-          <message>PASS</message>
-        </page>
-      `,
-      xsl: `
-        <xsl:stylesheet version="1.0"
-                                      xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
-                                      xmlns:exsl="http://exslt.org/common">
-          <xsl:output method="html"/>
-          <xsl:variable name="colorvar">
-            <entry key="green">color: green</entry>
-          </xsl:variable>
-          <xsl:variable name="colors" select="exsl:node-set($colorvar)"/>
-          <xsl:template match="/">
-            <xsl:apply-templates select="/page/message"/>
-          </xsl:template>
-          <xsl:template match="/page/message">
-            <div>
-              <xsl:attribute name="style">
-                <xsl:value-of select="$colors/entry[@key='green']"/>
-              </xsl:attribute>
-              <xsl:value-of select="."/>
-            </div>
-          </xsl:template>
-        </xsl:stylesheet>
-      `,
-    },
-    {
-            name: 'HTML-based Invocation',
-            html: `
-              <script>window.xsltUsePolyfillAlways = true;<\/script>
-              {{SCRIPT_INJECTION_LOCATION}}
-              <script>
-                function startTest() {
-                  const xslString = \`<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
-                    <xsl:output method="html"/>
-                    <xsl:template match="/">
-                      <xsl:apply-templates select="/page/message"/>
-                    </xsl:template>
-                    <xsl:template match="/page/message">
-                      <div style="color:green">
-                        <xsl:value-of select="."/>
-                      </div>
-                    </xsl:template>
-                  </xsl:stylesheet>\`;
-      
-                  const xmlString = \`<?xml version="1.0"?>
-                    <?xml-stylesheet type="text/xsl" href="data:application/xml;base64,\${btoa(unescape(encodeURIComponent(xslString)))}" ?>
-                    <page>
-                      <message>PASS</message>
-                    </page>\`;
-      
-                  const xmlUrl = 'data:application/xml;base64,' + btoa(unescape(encodeURIComponent(xmlString)));
-                  loadXmlUrlWithXsltWhenReady(xmlUrl);
-                }
-              <\/script>
-            `,
-            setup: (iframe) => {
-              iframe.contentWindow.startTest();
-            }
-          },
-    {
-      name: 'Script Execution in Output',
-      xml: 
-        `
-        <?xml version="1.0" encoding="UTF-8"?>
-        <?xml-stylesheet type="text/xsl" href="{{XSL_HREF}}"?>
-        <document>
-          {{SCRIPT_INJECTION_LOCATION}}
-        </document>
-      `,
-      xsl: 
-        `
-        <?xml version="1.0" encoding="UTF-8"?>
-        <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
-          <xsl:output method="html"/>
-          <xsl:template match="/">
-            <html>
-              <body>
-                <script xmlns="http://www.w3.org/1999/xhtml">
-                  document.write('<div style="color:green">PASS</div>');
-                <\/script>
-              </body>
-            </html>
-          </xsl:template>
-        </xsl:stylesheet>
-      `,
-    },
-    {
-      name: 'XHTML Transformation',
-      xml: 
-        `
-        <?xml version="1.0" encoding="UTF-8"?>
-        <?xml-stylesheet type="text/xsl" href="{{XSL_HREF}}"?>
-        <html xmlns="http://www.w3.org/1999/xhtml">
-          <head>
-              <title>Original XHTML Page</title>
-              {{SCRIPT_INJECTION_LOCATION}}
-          </head>
-          <body>
-              <h1 style="color:green">PASS</h1>
-          </body>
-        </html>
-      `,
-      xsl: 
-        `
-        <?xml version="1.0" encoding="UTF-8"?>
-        <xsl:stylesheet version="1.0"
-            xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
-            xmlns:xhtml="http://www.w3.org/1999/xhtml"
-            exclude-result-prefixes="xhtml">
-
-            <xsl:output method="html" doctype-public="-//W3C//DTD HTML 4.01//EN" indent="yes"/>
-
-            <xsl:template match="/">
-                <xsl:apply-templates select="//xhtml:body/*"/>
-            </xsl:template>
-
-            <xsl:template match="@*|node()">
-                <xsl:copy>
-                    <xsl:apply-templates select="@*|node()"/>
-                </xsl:copy>
-            </xsl:template>
-
-        </xsl:stylesheet>
-      `,
-    },
-    {
-      name: '`document(\'\')` Functionality',
-      xml: 
-        `
-        <?xml version="1.0"?>
-        <?xml-stylesheet type="text/xsl" href="{{XSL_HREF}}"?>
-        <content>
-          {{SCRIPT_INJECTION_LOCATION}}
-        </content>
-      `,
-      xsl: 
-        `
-        <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform" xmlns:doc="my-document-ns" exclude-result-prefixes="doc">
-            <xsl:output method="html" indent="yes" omit-xml-declaration="yes" />
-            <doc:MyData>
-                <p style="color:green">PASS</p>
-            </doc:MyData>
-            <xsl:variable name="stylesheetData" select="document('')/*/doc:MyData"/>
-            <xsl:template match="/content">
-                <xsl:copy-of select="$stylesheetData/p"/>
-            </xsl:template>
-        </xsl:stylesheet>
-      `,
-    },
-    {
-      name: '`XSLTProcessor` API',
-      html: '<body>{{SCRIPT_INJECTION_LOCATION}}<div id="target"></div></body>',
-      setup: (iframe) => {
-        const doc = iframe.contentDocument;
-        const win = iframe.contentWindow;
-
-        const run = () => {
-          const xmlString = `<page><message>PASS</message></page>`;
-          const xslString = `<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
-              <xsl:template match="/">
-                <xsl:apply-templates select="/page/message"/>
-              </xsl:template>
-              <xsl:template match="/page/message">
-                <div style="color:green"><xsl:value-of select="."/></div>
-              </xsl:template>
-            </xsl:stylesheet>`;
-
-          const parser = new win.DOMParser();
-          const xmlDoc = parser.parseFromString(xmlString, "application/xml");
-          const xslDoc = parser.parseFromString(xslString, "application/xml");
-
-          const xsltProcessor = new win.XSLTProcessor();
-          xsltProcessor.importStylesheet(xslDoc);
-          const fragment = xsltProcessor.transformToFragment(xmlDoc, doc);
-          doc.getElementById("target").appendChild(fragment);
-        };
-
-        if (win.xsltPolyfillReady) {
-          win.xsltPolyfillReady().then(run);
-        } else {
-          run();
-        }
-      }
-    },
-    {
-      name: 'Malformed XML',
-      xml: 
-        `
-        <?xml version="1.0"?>
-        <?xml-stylesheet type="text/xsl" href="{{XSL_HREF}}"?>
-        <page>
-          {{SCRIPT_INJECTION_LOCATION}}
-          <message>PASS (raw xml)</message>
-        </page>
-        <malformed>
-      `,
-      xsl: 
-        `
-        <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
-          <xsl:template match="/page/message">
-            <div><xsl:value-of select="."/></div>
-          </xsl:template>
-        </xsl:stylesheet>
-      `,
-    },
-    {
-      name: 'Malformed XSLT',
-      xml: 
-        `
-        <?xml version="1.0"?>
-        <?xml-stylesheet type="text/xsl" href="{{XSL_HREF}}"?>
-        <page>
-          {{SCRIPT_INJECTION_LOCATION}}
-          <message>PASS (raw xml)</message>
-        </page>
-      `,
-      xsl: 
-        `
-        <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
-          <xsl:template match="/page/message">
-            <div><xsl:value-of select="."/></div>
-          </xsl:template>
-        </xsl:stylesheet>
-        <malformed>
-      `,
-    },
-    {
-      name: 'Edge Case: Empty Inputs (Valid XML, Empty XSLT)',
-      xml: 
-        `
-        <?xml version="1.0"?>
-        <?xml-stylesheet type="text/xsl" href="{{XSL_HREF}}"?>
-        <page>
-          {{SCRIPT_INJECTION_LOCATION}}
-          <message>PASS</message>
-        </page>
-      `,
-      xsl: `<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform" />`,
-    },
-    {
-      name: 'Edge Case: Empty Inputs (Empty XML, Valid XSLT)',
-      xml: 
-        `
-        <?xml version="1.0"?>
-        <?xml-stylesheet type="text/xsl" href="{{XSL_HREF}}"?>
-        <root>
-          {{SCRIPT_INJECTION_LOCATION}}
-        </root>
-      `,
-      xsl: 
-        `
-        <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
-          <xsl:template match="/">
-            <div style="color:green">PASS</div>
-          </xsl:template>
-        </xsl:stylesheet>
-      `,
-    },
-    {
-      name: 'Edge Case: No Matching Templates',
-      xml: 
-        `
-        <?xml version="1.0"?>
-        <?xml-stylesheet type="text/xsl" href="{{XSL_HREF}}"?>
-        <page>
-          {{SCRIPT_INJECTION_LOCATION}}
-          <message>PASS</message>
-        </page>
-      `,
-      xsl: 
-        `
-        <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
-          <xsl:template match="non-existing-element" />
-        </xsl:stylesheet>
-      `,
-    },
-  ];
 </script>
