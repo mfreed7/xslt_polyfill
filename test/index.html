@@ -12,11 +12,16 @@
   }
   th, td {
     border: 1px solid #ccc;
-    padding: 8px;
+    padding: 4px;
     text-align: left;
   }
   th {
     background-color: #f2f2f2;
+  }
+  iframe {
+    height: 3em;
+    width: 100%;
+    border: 0;
   }
 </style>
 </head>
@@ -48,13 +53,10 @@
     const row = document.createElement('tr');
     const nameCell = document.createElement('td');
     nameCell.textContent = name;
-    nameCell.style.verticalAlign = 'top';
     row.appendChild(nameCell);
-
     const outputCell = document.createElement('td');
     outputCell.appendChild(iframe);
     row.appendChild(outputCell);
-
     document.getElementById('results').querySelector('tbody').appendChild(row);
   }
 
@@ -76,9 +78,6 @@
 
   function runTest(testCase, mode) {
     const iframe = document.createElement('iframe');
-    iframe.style.width = '100%';
-    iframe.style.height = '150px';
-    iframe.style.border = '1px solid #ccc';
 
     let content = '';
     if (testCase.html) {
