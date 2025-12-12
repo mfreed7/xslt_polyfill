@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>XSLT Polyfill Test Runner</title>
+<style>
+  body {
+    font-family: sans-serif;
+  }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+  }
+  th, td {
+    border: 1px solid #ccc;
+    padding: 8px;
+    text-align: left;
+  }
+  th {
+    background-color: #f2f2f2;
+  }
+</style>
+</head>
+<body>
+  <h1>XSLT Polyfill Test Runner</h1>
+  <div>
+    <select id="mode">
+      <option value="native">Run with Native Browser Feature</option>
+      <option value="src">Run with Polyfill (Source)</option>
+      <option value="min">Run with Polyfill (Minified)</option>
+    </select>
+    <button id="go">Go</button>
+  </div>
+  <table id="results">
+    <thead>
+      <tr>
+        <th>Test Case</th>
+        <th>Output</th>
+      </tr>
+    </thead>
+    <tbody>
+    </tbody>
+  </table>
+</body>
+</html>
+
+<script>
+  function addTestResult(name, iframe) {
+    const row = document.createElement('tr');
+    const nameCell = document.createElement('td');
+    nameCell.textContent = name;
+    nameCell.style.verticalAlign = 'top';
+    row.appendChild(nameCell);
+
+    const outputCell = document.createElement('td');
+    outputCell.appendChild(iframe);
+    row.appendChild(outputCell);
+
+    document.getElementById('results').querySelector('tbody').appendChild(row);
+  }
+
+  function injectScripts(iframe, scripts) {
+    return new Promise(resolve => {
+      let promise = Promise.resolve();
+      scripts.forEach(scriptSrc => {
+        promise = promise.then(() => new Promise(loadResolve => {
+          const script = iframe.contentDocument.createElement('script');
+          script.src = scriptSrc;
+          script.addEventListener('load', loadResolve);
+          script.addEventListener('error', loadResolve); // Don't block on failed loads
+          iframe.contentDocument.head.appendChild(script);
+        }));
+      });
+      promise.then(resolve);
+    });
+  }
+
+  function runTest(testCase, mode) {
+    const iframe = document.createElement('iframe');
+    iframe.style.width = '100%';
+    iframe.style.height = '150px';
+    iframe.style.border = '1px solid #ccc';
+
+    let content = '';
+    if (testCase.html) {
+      content = testCase.html;
+    } else { // XML case
+      let xml = testCase.xml;
+      if (testCase.xsl) {
+        const xsl_base64 = btoa(unescape(encodeURIComponent(testCase.xsl)));
+        xml = xml.replace('{{XSL_HREF}}', `data:application/xml;charset=utf-8;base64,${xsl_base64}`);
+      }
+      content = xml;
+    }
+
+    iframe.addEventListener('load', () => {
+      let scriptsToInject = [];
+      if (mode === 'src') {
+        scriptsToInject = ['../dist/xslt_wasm.js', '../src/xslt-polyfill-src.js'];
+      } else if (mode === 'min') {
+        scriptsToInject = ['../xslt-polyfill.min.js'];
+      }
+
+      if (scriptsToInject.length > 0) {
+        injectScripts(iframe, scriptsToInject).then(() => {
+          if (testCase.setup) {
+            testCase.setup(iframe);
+          }
+        });
+      } else {
+        if (testCase.setup) {
+          testCase.setup(iframe);
+        }
+      }
+    });
+
+    iframe.srcdoc = content;
+    return iframe;
+  }
+
+  function runTests() {
+    document.getElementById('results').querySelector('tbody').innerHTML = '';
+    const mode = document.getElementById('mode').value;
+
+    if (mode === 'native' && typeof window.XSLTProcessor === 'undefined') {
+      alert('Native XSLTProcessor not supported by this browser.');
+      return;
+    }
+
+    for (const testCase of testCases) {
+      const iframe = runTest(testCase, mode);
+      addTestResult(testCase.name, iframe);
+    }
+  }
+
+  document.getElementById('mode').options[0].disabled = typeof window.XSLTProcessor === 'undefined';
+  document.getElementById('go').addEventListener('click', runTests);
+
+
+
+  const testCases = [
+    {
+      name: 'Basic Transformation',
+      xml: `
+        <?xml version="1.0"?>
+        <?xml-stylesheet type="text/xsl" href="{{XSL_HREF}}"?>
+        <page>
+          <message>PASS</message>
+        </page>
+      `,
+      xsl: `
+        <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+          <xsl:output method="html"/>
+          <xsl:template match="/">
+            <xsl:apply-templates select="/page/message"/>
+          </xsl:template>
+          <xsl:template match="/page/message">
+            <div style="color:green">
+              <xsl:value-of select="."/>
+            </div>
+          </xsl:template>
+        </xsl:stylesheet>
+      `,
+    },
+    {
+      name: 'EXSLT Support',
+      xml: `
+        <?xml version="1.0"?>
+        <?xml-stylesheet type="text/xsl" href="{{XSL_HREF}}"?>
+        <page>
+          <message>PASS</message>
+        </page>
+      `,
+      xsl: `
+        <xsl:stylesheet version="1.0"
+                                      xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+                                      xmlns:exsl="http://exslt.org/common">
+          <xsl:output method="html"/>
+          <xsl:variable name="colorvar">
+            <entry key="green">color: green</entry>
+          </xsl:variable>
+          <xsl:variable name="colors" select="exsl:node-set($colorvar)"/>
+          <xsl:template match="/">
+            <xsl:apply-templates select="/page/message"/>
+          </xsl:template>
+          <xsl:template match="/page/message">
+            <div>
+              <xsl:attribute name="style">
+                <xsl:value-of select="$colors/entry[@key='green']"/>
+              </xsl:attribute>
+              <xsl:value-of select="."/>
+            </div>
+          </xsl:template>
+        </xsl:stylesheet>
+      `,
+    },
+    {
+            name: 'HTML-based Invocation',
+            html: `
+              <script>window.xsltUsePolyfillAlways = true;<\/script>
+              <script>
+                function startTest() {
+                  const xslString = \`<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+                    <xsl:output method="html"/>
+                    <xsl:template match="/">
+                      <xsl:apply-templates select="/page/message"/>
+                    </xsl:template>
+                    <xsl:template match="/page/message">
+                      <div style="color:green">
+                        <xsl:value-of select="."/>
+                      </div>
+                    </xsl:template>
+                  </xsl:stylesheet>\`;
+      
+                  const xmlString = \`<?xml version="1.0"?>
+                    <?xml-stylesheet type="text/xsl" href="data:application/xml;base64,\${btoa(unescape(encodeURIComponent(xslString)))}" ?>
+                    <page>
+                      <message>PASS</message>
+                    </page>\`;
+      
+                  const xmlUrl = 'data:application/xml;base64,' + btoa(unescape(encodeURIComponent(xmlString)));
+                  loadXmlUrlWithXsltWhenReady(xmlUrl);
+                }
+              <\/script>
+            `,
+            setup: (iframe) => {
+              iframe.contentWindow.startTest();
+            }
+          },
+    {
+      name: 'Script Execution in Output',
+      xml: 
+        `
+        <?xml version="1.0" encoding="UTF-8"?>
+        <?xml-stylesheet type="text/xsl" href="{{XSL_HREF}}"?>
+        <document/>
+      `,
+      xsl: 
+        `
+        <?xml version="1.0" encoding="UTF-8"?>
+        <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+          <xsl:output method="html"/>
+          <xsl:template match="/">
+            <html>
+              <body>
+                <script xmlns="http://www.w3.org/1999/xhtml">
+                  document.write('<div style="color:green">PASS</div>');
+                <\/script>
+              </body>
+            </html>
+          </xsl:template>
+        </xsl:stylesheet>
+      `,
+    },
+    {
+      name: 'XHTML Transformation',
+      xml: 
+        `
+        <?xml version="1.0" encoding="UTF-8"?>
+        <?xml-stylesheet type="text/xsl" href="{{XSL_HREF}}"?>
+        <html xmlns="http://www.w3.org/1999/xhtml">
+          <head>
+              <title>Original XHTML Page</title>
+          </head>
+          <body>
+              <h1 style="color:green">PASS</h1>
+          </body>
+        </html>
+      `,
+      xsl: 
+        `
+        <?xml version="1.0" encoding="UTF-8"?>
+        <xsl:stylesheet version="1.0"
+            xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+            xmlns:xhtml="http://www.w3.org/1999/xhtml"
+            exclude-result-prefixes="xhtml">
+
+            <xsl:output method="html" doctype-public="-//W3C//DTD HTML 4.01//EN" indent="yes"/>
+
+            <xsl:template match="/">
+                <xsl:apply-templates select="//xhtml:body/*"/>
+            </xsl:template>
+
+            <xsl:template match="@*|node()">
+                <xsl:copy>
+                    <xsl:apply-templates select="@*|node()"/>
+                </xsl:copy>
+            </xsl:template>
+
+        </xsl:stylesheet>
+      `,
+    },
+    {
+      name: '`document(\'\')` Functionality',
+      xml: 
+        `
+        <?xml version="1.0"?>
+        <?xml-stylesheet type="text/xsl" href="{{XSL_HREF}}"?>
+        <content>
+        </content>
+      `,
+      xsl: 
+        `
+        <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform" xmlns:doc="my-document-ns" exclude-result-prefixes="doc">
+            <xsl:output method="html" indent="yes" omit-xml-declaration="yes" />
+            <doc:MyData>
+                <p style="color:green">PASS</p>
+            </doc:MyData>
+            <xsl:variable name="stylesheetData" select="document('')/*/doc:MyData"/>
+            <xsl:template match="/content">
+                <xsl:copy-of select="$stylesheetData/p"/>
+            </xsl:template>
+        </xsl:stylesheet>
+      `,
+    },
+    {
+      name: '`XSLTProcessor` API',
+      html: '<body><div id="target"></div></body>',
+      setup: (iframe) => {
+        const doc = iframe.contentDocument;
+        const win = iframe.contentWindow;
+
+        const run = () => {
+          const xmlString = `<page><message>PASS</message></page>`;
+          const xslString = `<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+              <xsl:template match="/">
+                <xsl:apply-templates select="/page/message"/>
+              </xsl:template>
+              <xsl:template match="/page/message">
+                <div style="color:green"><xsl:value-of select="."/></div>
+              </xsl:template>
+            </xsl:stylesheet>`;
+
+          const parser = new win.DOMParser();
+          const xmlDoc = parser.parseFromString(xmlString, "application/xml");
+          const xslDoc = parser.parseFromString(xslString, "application/xml");
+
+          const xsltProcessor = new win.XSLTProcessor();
+          xsltProcessor.importStylesheet(xslDoc);
+          const fragment = xsltProcessor.transformToFragment(xmlDoc, doc);
+          doc.getElementById("target").appendChild(fragment);
+        };
+
+        if (win.xsltPolyfillReady) {
+          win.xsltPolyfillReady().then(run);
+        } else {
+          run();
+        }
+      }
+    },
+    {
+      name: 'Malformed XML',
+      xml: 
+        `
+        <?xml version="1.0"?>
+        <?xml-stylesheet type="text/xsl" href="{{XSL_HREF}}"?>
+        <page>
+          <message>PASS (raw xml)</message>
+        </page>
+        <malformed>
+      `,
+      xsl: 
+        `
+        <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+          <xsl:template match="/page/message">
+            <div><xsl:value-of select="."/></div>
+          </xsl:template>
+        </xsl:stylesheet>
+      `,
+    },
+    {
+      name: 'Malformed XSLT',
+      xml: 
+        `
+        <?xml version="1.0"?>
+        <?xml-stylesheet type="text/xsl" href="{{XSL_HREF}}"?>
+        <page>
+          <message>PASS (raw xml)</message>
+        </page>
+      `,
+      xsl: 
+        `
+        <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+          <xsl:template match="/page/message">
+            <div><xsl:value-of select="."/></div>
+          </xsl:template>
+        </xsl:stylesheet>
+        <malformed>
+      `,
+    },
+    {
+      name: 'Edge Case: Empty Inputs (Valid XML, Empty XSLT)',
+      xml: 
+        `
+        <?xml version="1.0"?>
+        <?xml-stylesheet type="text/xsl" href="{{XSL_HREF}}"?>
+        <page>
+          <message>PASS</message>
+        </page>
+      `,
+      xsl: `<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform" />`,
+    },
+    {
+      name: 'Edge Case: Empty Inputs (Empty XML, Valid XSLT)',
+      xml: 
+        `
+        <?xml version="1.0"?>
+        <?xml-stylesheet type="text/xsl" href="{{XSL_HREF}}"?>
+        <root/>
+      `,
+      xsl: 
+        `
+        <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+          <xsl:template match="/">
+            <div style="color:green">PASS</div>
+          </xsl:template>
+        </xsl:stylesheet>
+      `,
+    },
+    {
+      name: 'Edge Case: No Matching Templates',
+      xml: 
+        `
+        <?xml version="1.0"?>
+        <?xml-stylesheet type="text/xsl" href="{{XSL_HREF}}"?>
+        <page>
+          <message>PASS</message>
+        </page>
+      `,
+      xsl: 
+        `
+        <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+          <xsl:template match="non-existing-element" />
+        </xsl:stylesheet>
+      `,
+    },
+  ];
+</script>
