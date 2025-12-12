@@ -435,12 +435,15 @@ async function transformXmlWithXslt(xmlContent, xsltContent, parameters, xsltUrl
     fragment.append(...parsedDoc.documentElement.childNodes);
     // Scripts need to be re-created, so they will execute:
     const scripts = fragment.querySelectorAll('script');
+    const textArea = document.createElementNS('http://www.w3.org/1999/xhtml','textarea');
     scripts.forEach((oldScript) => {
       const newScript = document.createElementNS('http://www.w3.org/1999/xhtml','script');
       Array.from(oldScript.attributes).forEach((attr) => {
         newScript.setAttribute(attr.name, attr.value);
       });
-      newScript.textContent = oldScript.textContent;
+      // Use a textarea to decode HTML entities.
+      textArea.innerHTML = oldScript.textContent;
+      newScript.textContent = textArea.value;
       oldScript.parentNode.replaceChild(newScript, oldScript);
     });
     // The html element could have attributes - copy them.
