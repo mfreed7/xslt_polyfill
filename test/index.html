@@ -60,22 +60,6 @@
     document.getElementById('results').querySelector('tbody').appendChild(row);
   }
 
-  function injectScripts(iframe, scripts) {
-    return new Promise(resolve => {
-      let promise = Promise.resolve();
-      scripts.forEach(scriptSrc => {
-        promise = promise.then(() => new Promise(loadResolve => {
-          const script = iframe.contentDocument.createElement('script');
-          script.src = scriptSrc;
-          script.addEventListener('load', loadResolve);
-          script.addEventListener('error', loadResolve); // Don't block on failed loads
-          iframe.contentDocument.head.appendChild(script);
-        }));
-      });
-      promise.then(resolve);
-    });
-  }
-
   function runTest(testCase, mode) {
     const iframe = document.createElement('iframe');
 
@@ -91,26 +75,23 @@
       content = xml;
     }
 
-    iframe.addEventListener('load', () => {
-      let scriptsToInject = [];
-      if (mode === 'src') {
-        scriptsToInject = ['../dist/xslt_wasm.js', '../src/xslt-polyfill-src.js'];
-      } else if (mode === 'min') {
-        scriptsToInject = ['../xslt-polyfill.min.js'];
-      }
+    let scriptInjection = '';
+    if (mode === 'src') {
+      scriptInjection =
+          '<script src="../dist/xslt_wasm.js" xmlns="http://www.w3.org/1999/xhtml" charset="utf-8"><\/script>' +
+          '<script src="../src/xslt-polyfill-src.js" xmlns="http://www.w3.org/1999/xhtml"><\/script>';
+    } else if (mode === 'min') {
+      scriptInjection =
+          '<script src="../xslt-polyfill.min.js" xmlns="http://www.w3.org/1999/xhtml" charset="utf-8"><\/script>';
+    }
 
-      if (scriptsToInject.length > 0) {
-        injectScripts(iframe, scriptsToInject).then(() => {
-          if (testCase.setup) {
-            testCase.setup(iframe);
-          }
-        });
-      } else {
-        if (testCase.setup) {
-          testCase.setup(iframe);
-        }
-      }
-    });
+    content = content.replace('{{SCRIPT_INJECTION_LOCATION}}', scriptInjection);
+
+    if (testCase.setup) {
+      iframe.addEventListener('load', () => {
+        testCase.setup(iframe);
+      });
+    }
 
     iframe.srcdoc = content;
     return iframe;
@@ -143,6 +124,7 @@
         <?xml version="1.0"?>
         <?xml-stylesheet type="text/xsl" href="{{XSL_HREF}}"?>
         <page>
+          {{SCRIPT_INJECTION_LOCATION}}
           <message>PASS</message>
         </page>
       `,
@@ -166,6 +148,7 @@
         <?xml version="1.0"?>
         <?xml-stylesheet type="text/xsl" href="{{XSL_HREF}}"?>
         <page>
+          {{SCRIPT_INJECTION_LOCATION}}
           <message>PASS</message>
         </page>
       `,
@@ -196,6 +179,7 @@
             name: 'HTML-based Invocation',
             html: `
               <script>window.xsltUsePolyfillAlways = true;<\/script>
+              {{SCRIPT_INJECTION_LOCATION}}
               <script>
                 function startTest() {
                   const xslString = \`<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
@@ -231,7 +215,9 @@
         `
         <?xml version="1.0" encoding="UTF-8"?>
         <?xml-stylesheet type="text/xsl" href="{{XSL_HREF}}"?>
-        <document/>
+        <document>
+          {{SCRIPT_INJECTION_LOCATION}}
+        </document>
       `,
       xsl: 
         `
@@ -259,6 +245,7 @@
         <html xmlns="http://www.w3.org/1999/xhtml">
           <head>
               <title>Original XHTML Page</title>
+              {{SCRIPT_INJECTION_LOCATION}}
           </head>
           <body>
               <h1 style="color:green">PASS</h1>
@@ -295,6 +282,7 @@
         <?xml version="1.0"?>
         <?xml-stylesheet type="text/xsl" href="{{XSL_HREF}}"?>
         <content>
+          {{SCRIPT_INJECTION_LOCATION}}
         </content>
       `,
       xsl: 
@@ -313,7 +301,7 @@
     },
     {
       name: '`XSLTProcessor` API',
-      html: '<body><div id="target"></div></body>',
+      html: '<body>{{SCRIPT_INJECTION_LOCATION}}<div id="target"></div></body>',
       setup: (iframe) => {
         const doc = iframe.contentDocument;
         const win = iframe.contentWindow;
@@ -353,6 +341,7 @@
         <?xml version="1.0"?>
         <?xml-stylesheet type="text/xsl" href="{{XSL_HREF}}"?>
         <page>
+          {{SCRIPT_INJECTION_LOCATION}}
           <message>PASS (raw xml)</message>
         </page>
         <malformed>
@@ -373,6 +362,7 @@
         <?xml version="1.0"?>
         <?xml-stylesheet type="text/xsl" href="{{XSL_HREF}}"?>
         <page>
+          {{SCRIPT_INJECTION_LOCATION}}
           <message>PASS (raw xml)</message>
         </page>
       `,
@@ -393,6 +383,7 @@
         <?xml version="1.0"?>
         <?xml-stylesheet type="text/xsl" href="{{XSL_HREF}}"?>
         <page>
+          {{SCRIPT_INJECTION_LOCATION}}
           <message>PASS</message>
         </page>
       `,
@@ -404,7 +395,9 @@
         `
         <?xml version="1.0"?>
         <?xml-stylesheet type="text/xsl" href="{{XSL_HREF}}"?>
-        <root/>
+        <root>
+          {{SCRIPT_INJECTION_LOCATION}}
+        </root>
       `,
       xsl: 
         `
@@ -422,6 +415,7 @@
         <?xml version="1.0"?>
         <?xml-stylesheet type="text/xsl" href="{{XSL_HREF}}"?>
         <page>
+          {{SCRIPT_INJECTION_LOCATION}}
           <message>PASS</message>
         </page>
       `,
