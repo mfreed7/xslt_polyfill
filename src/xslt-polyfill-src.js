@@ -111,7 +111,7 @@
 
     function transformXmlWithXslt(xmlContent, xsltContent, parameters, xsltUrl) {
       if (!wasm_transform || !WasmModule) {
-        throw new Error(`Polyfill XSLT WASM module not yet loaded. Please wait for the ${promiseName} promise to resolve.`);
+        throw new Error(`Polyfill XSLT Wasm module not yet loaded. Please wait for the ${promiseName} promise to resolve.`);
       }
 
       const textEncoder = new TextEncoder();
@@ -123,31 +123,31 @@
       let xsltUrlPtr = 0;
       const paramStringPtrs = [];
 
-      // Helper to write byte arrays to WASM memory manually.
+      // Helper to write byte arrays to Wasm memory manually.
       const writeBytesToHeap = (bytes) => {
           const ptr = WasmModule._malloc(bytes.length + 1);
-          if (!ptr) throw new Error(`WASM malloc failed for bytes of length ${bytes.length}`);
+          if (!ptr) throw new Error(`Wasm malloc failed for bytes of length ${bytes.length}`);
           const heapu8 = new Uint8Array(WasmModule.wasmMemory.buffer);
           heapu8.set(bytes, ptr);
           heapu8[ptr + bytes.length] = 0; // Null terminator
           return ptr;
       };
 
-      // Helper to write JS strings to WASM memory manually.
+      // Helper to write JS strings to Wasm memory manually.
       const writeStringToHeap = (str) => {
           if (str === null || str === undefined || typeof str !== 'string') {
-            throw new Error(`Cannot write non-string value to WASM heap: ${str}`);
+            throw new Error(`Cannot write non-string value to Wasm heap: ${str}`);
           }
           const encodedStr = textEncoder.encode(str);
           const ptr = WasmModule._malloc(encodedStr.length + 1);
-          if (!ptr) throw new Error(`WASM malloc failed for string: ${str.substring(0, 50)}...`);
+          if (!ptr) throw new Error(`Wasm malloc failed for string: ${str.substring(0, 50)}...`);
           const heapu8 = new Uint8Array(WasmModule.wasmMemory.buffer);
           heapu8.set(encodedStr, ptr);
           heapu8[ptr + encodedStr.length] = 0; // Null terminator
           return ptr;
       };
 
-      // Helper to read a null-terminated UTF-8 string from WASM memory.
+      // Helper to read a null-terminated UTF-8 string from Wasm memory.
       const readStringFromHeap = (ptr) => {
           const heapu8 = new Uint8Array(WasmModule.wasmMemory.buffer);
           let end = ptr;
@@ -172,12 +172,12 @@
               }
           }
 
-          // 2. Allocate memory for parameter strings and the pointer array in the WASM heap.
+          // 2. Allocate memory for parameter strings and the pointer array in the Wasm heap.
           if (paramsArray.length > 0) {
               // Allocate memory for the array of pointers (char**), plus a NULL terminator.
               const ptrSize = 4; // Pointers are 32-bit in wasm32
               paramsPtr = WasmModule._malloc((paramsArray.length + 1) * ptrSize);
-              if (!paramsPtr) throw new Error("WASM malloc failed for params pointer array.");
+              if (!paramsPtr) throw new Error("Wasm malloc failed for params pointer array.");
 
               // Allocate memory for each string, write it to the heap, and store its pointer.
               paramsArray.forEach((str, i) => {
@@ -198,8 +198,11 @@
           xsltPtr = writeBytesToHeap(xsltBytes);
           xsltUrlPtr = writeStringToHeap(xsltUrl);
 
-          // 4. Call the C function with pointers to the data in WASM memory.
+          // 4. Call the C function with pointers to the data in Wasm memory.
           const resultPtr = wasm_transform(xmlPtr, xmlBytes.byteLength, xsltPtr, xsltBytes.byteLength, paramsPtr, xsltUrlPtr);
+          if (resultPtr instanceof Promise) {
+            showError('Received a promise');
+          }
 
           if (!resultPtr) {
               throw new Error(`XSLT Transformation failed. See console for details.`);
@@ -214,7 +217,7 @@
           return resultString;
 
       } finally {
-          // 7. Clean up all allocated memory to prevent memory leaks in the WASM heap.
+          // 7. Clean up all allocated memory to prevent memory leaks in the Wasm heap.
           if (xmlPtr) wasm_free(xmlPtr);
           if (xsltPtr) wasm_free(xsltPtr);
           if (xsltUrlPtr) wasm_free(xsltUrlPtr);
@@ -291,7 +294,7 @@
     window.XSLTProcessor = XSLTProcessor;
     window.xsltPolyfillReady = xsltPolyfillReady;
 
-    // Finally, initialize the WASM module.
+    // Finally, initialize the Wasm module.
     let WasmModule = null;
     let wasm_transform = null;
     let wasm_free = null;
@@ -305,26 +308,12 @@
         // Tell people we're ready.
         polyfillReadyPromiseResolve();
     }).catch(err => {
-        console.error("Error loading XSLT WASM module:", err);
+        console.error("Error loading XSLT Wasm module:", err);
         polyfillReadyPromiseReject(err);
     });
 
     function absoluteUrl(url) {
       return new URL(url, window.location.href).href;
-    }
-    async function loadXmlWithXsltFromUrl(url) {
-      // Fetch the XML file from provided url.
-      url = absoluteUrl(url);
-      const xmlResponse = await fetch(url);
-      if (!xmlResponse.ok) {
-        return showError(`Failed to fetch XML file: ${xmlResponse.statusText}`);
-      }
-      const xmlBytes = new Uint8Array(await xmlResponse.arrayBuffer());
-      return loadXmlWithXsltFromBytes(xmlBytes, url);
-    }
-  
-    function loadXmlUrlWithXsltWhenReady(url) {
-      return xsltPolyfillReady().then(() => loadXmlWithXsltFromUrl(url));
     }
   
     async function loadXmlWithXsltFromBytes(xmlBytes, xmlUrl) {
@@ -374,9 +363,6 @@
       
       // Replace the document with the result
       replaceDoc(resultHtml);
-    }
-    function loadXmlContentWithXsltFromBytesWhenReady(xmlBytes, xmlUrl) {
-      return xsltPolyfillReady().then(() => loadXmlWithXsltFromBytes(xmlBytes, xmlUrl));
     }
 
     // Replace the current document with the provided HTML.
@@ -438,10 +424,19 @@
       }
       return _originalCreateElement.apply(document, arguments);
     };
-    
-    window.loadXmlWithXsltFromUrl = loadXmlWithXsltFromUrl;
-    window.loadXmlUrlWithXsltWhenReady = loadXmlUrlWithXsltWhenReady;
-    window.loadXmlContentWithXsltFromBytesWhenReady = loadXmlContentWithXsltFromBytesWhenReady;
+
+    function parseAndReplaceCurrentXMLDoc(doc) {
+      const xml = new XMLSerializer().serializeToString(doc);
+      const xmlBytes = new TextEncoder().encode(xml);
+      xsltPolyfillReady()
+        .then(() => loadXmlWithXsltFromBytes(xmlBytes, doc.defaultView.location.href))
+        .catch((err) => {
+          showError(`Error displaying XML file: ${err.message || err.toString()}`);
+        });
+    }
+
+    window.parseAndReplaceCurrentXMLDoc = parseAndReplaceCurrentXMLDoc;
+
   } // if (polyfillWillLoad)
 
   // Replace the current document with the provided error message.
@@ -450,23 +445,13 @@
     throw new Error(errorMessage);
   }
 
-  function replaceCurrentXMLDoc(doc) {
-    const xml = new XMLSerializer().serializeToString(doc);
-    const xmlBytes = new TextEncoder().encode(xml);
-    loadXmlContentWithXsltFromBytesWhenReady(xmlBytes, doc.defaultView.location.href).catch(
-      (err) => {
-        showError(`Error displaying XML file: ${err.message || err.toString()}`);
-      }
-    );
-  }
-
   if (!nativeSupported && document instanceof XMLDocument && !xsltDontAutoloadXmlDocs) {
     if (document.readyState === "loading") {
       document.addEventListener("DOMContentLoaded", () => {
-        replaceCurrentXMLDoc(document);
+        parseAndReplaceCurrentXMLDoc(document);
       });
     } else {
-      replaceCurrentXMLDoc(document);
+      parseAndReplaceCurrentXMLDoc(document);
     }
   }
 

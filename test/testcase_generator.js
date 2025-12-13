@@ -66,7 +66,10 @@ const testCases = [
             <xsl:template match="/">
                 <body>
                     <script>
-                        document.write('<div style="color:green">PASS</div>');
+                        const div = document.createElement('div');
+                        div.style.color = 'green';
+                        div.textContent = 'PASS';
+                        document.body.appendChild(div);
                     </script>
                 </body>
             </xsl:template>
@@ -143,8 +146,8 @@ if (!fs.existsSync(outputDir)) {
 
 const scriptInjections = {
   native: '',
-  source: '<script src="../dist/xslt_wasm.js" xmlns="http://www.w3.org/1999/xhtml" charset="utf-8"></script><script src="../src/xslt-polyfill-src.js" xmlns="http://www.w3.org/1999/xhtml"><\/script>',
-  minified: '<script src="../xslt-polyfill.min.js" xmlns="http://www.w3.org/1999/xhtml" charset="utf-8"></script>',
+  source: '<script src="../../dist/xslt-wasm.js" xmlns="http://www.w3.org/1999/xhtml" charset="utf-8"></script><script src="../../src/xslt-polyfill-src.js" xmlns="http://www.w3.org/1999/xhtml"><\/script>',
+  minified: '<script src="../../xslt-polyfill.min.js" xmlns="http://www.w3.org/1999/xhtml" charset="utf-8"></script>',
 };
 
 const generatedTestCases = {};

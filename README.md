@@ -70,7 +70,7 @@ The example above is available in the `test/` folder of this repo:
 Note that as of now, there are a few things that don't work perfectly:
  - The output of the transformation is assumed to be HTML in a few places.
    If the output is something else, like text or XML, things will likely break.
- - The `loadXmlUrlWithXsltWhenReady()` function will replace the contents of
+ - The `parseAndReplaceCurrentXMLDoc()` function will replace the contents of
    the *current* document (an `XHTML` document) with the transformed content.
    Because XHTML always renders in no-quirks mode, if the transformed (HTML)
    output content *doesn't* include a `<!DOCTYPE>`, then it ordinarily would
@@ -100,8 +100,11 @@ Note that as of now, there are a few things that don't work perfectly:
 
 ## Demos
 
-There are a few demos in the `test/` directory:
+There are a few tests and demos in the `test/` directory:
 
+- `test_suite.html`: a test suite that runs through various cases, with and without
+  the polyfill. To run this suite, you must generate the local test files, via
+  `node test/testcase_generator.js`.
 - `XSLTProcessor_example.html`: a test of the `XSLTProcessor` polyfill, which
   offers JS-based XSLT processing.
   \[[Run](https://mfreed7.github.io/xslt_polyfill/test/XSLTProcessor_example.html)\]
@@ -112,11 +115,6 @@ There are a few demos in the `test/` directory:
 - `demo_large.xml`: a much larger example, taken from a public site, which
   does the same as `demo.xml`, but with a more complex/realistic document.
   \[[Run](https://mfreed7.github.io/xslt_polyfill/test/demo_large.xml)\]
-- `demo_html.html`: a polyfill "replacement" of an XML document, `demo.xml`. This
-  example uses the `loadXmlUrlWithXsltWhenReady()` function from the polyfill to
-  load `demo.xml`, find its contained XSL processing instruction pointing to
-  `demo.xsl`, load that file, and then process them together, replacing the document.
-  \[[Run](https://mfreed7.github.io/xslt_polyfill/test/demo_html.html)\]
 
 ## Contributing
 ### Dependencies
