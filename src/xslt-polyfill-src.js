@@ -447,6 +447,7 @@
     }
 
     window.parseAndReplaceCurrentXMLDoc = parseAndReplaceCurrentXMLDoc;
+    window.loadXmlWithXsltFromBytes = loadXmlWithXsltFromBytes;
 
   } // if (polyfillWillLoad)
 
