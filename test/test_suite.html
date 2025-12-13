@@ -86,10 +86,6 @@
   function runTests(testCases) {
     document.getElementById('results').querySelector('tbody').innerHTML = '';
     const mode = modeElement.value;
-    if (mode === 'native' && !nativeSupported) {
-      alert('Native XSLTProcessor not supported by this browser.');
-      return;
-    }
     for (const testCase of testCases) {
       const iframe = runTest(testCase, mode);
       addTestResult(testCase.name, iframe);
@@ -97,11 +93,13 @@
   }
 
   if (nativeSupported) {
-    modeElement.options[1].disabled = true;
-    modeElement.options[2].disabled = true;
+    modeElement.selectedIndex = 0; // Native by default
+    const msg = " (Native feature ENABLED!)";
+    modeElement.options[1].textContent += msg;
+    modeElement.options[2].textContent += msg;
   } else {
-    modeElement.options[0].disabled = true;
-    modeElement.selectedIndex = 1;
+    modeElement.selectedIndex = 2; // Minified by default
+    modeElement.options[0].textContent += " (NOT supported!)";
   }
 
   async function loadTestsAndRun() {
