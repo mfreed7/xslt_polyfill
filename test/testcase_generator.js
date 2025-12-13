@@ -91,11 +91,11 @@ const testCases = [
             exclude-result-prefixes="doc">
         <xsl:output method="html" indent="yes" omit-xml-declaration="yes" />
         <doc:MyData>
-            <p style="color:green">PASS</p>
+            <div style="color:green">PASS</div>
         </doc:MyData>
         <xsl:variable name="stylesheetData" select="document('')/*/doc:MyData"/>
         <xsl:template match="/content">
-            <xsl:copy-of select="$stylesheetData/p"/>
+            <xsl:copy-of select="$stylesheetData/div"/>
         </xsl:template>
         </xsl:stylesheet>`,
 },
@@ -127,7 +127,8 @@ const testCases = [
             const xsltProcessor = new window.XSLTProcessor();
             xsltProcessor.importStylesheet(xslDoc);
             const fragment = xsltProcessor.transformToFragment(xmlDoc, document);
-            document.getElementById("target").appendChild(fragment);
+            const div = fragment.querySelector('div')
+            document.getElementById("target").appendChild(div);
         };
         </script>
         </body>

@@ -109,7 +109,7 @@
       return xsltsheet;
     }
 
-    function transformXmlWithXslt(xmlContent, xsltContent, parameters, xsltUrl) {
+    function transformXmlWithXslt(xmlContent, xsltContent, parameters, xsltUrl, allowAsync) {
       if (!wasm_transform || !WasmModule) {
         throw new Error(`Polyfill XSLT Wasm module not yet loaded. Please wait for the ${promiseName} promise to resolve.`);
       }
@@ -199,23 +199,34 @@
           xsltUrlPtr = writeStringToHeap(xsltUrl);
 
           // 4. Call the C function with pointers to the data in Wasm memory.
-          const resultPtr = wasm_transform(xmlPtr, xmlBytes.byteLength, xsltPtr, xsltBytes.byteLength, paramsPtr, xsltUrlPtr);
-          if (resultPtr instanceof Promise) {
-            showError('Received a promise');
-          }
-
-          if (!resultPtr) {
+          const resultPtr_or_Promise = wasm_transform(xmlPtr, xmlBytes.byteLength, xsltPtr, xsltBytes.byteLength, paramsPtr, xsltUrlPtr);
+          if (!resultPtr_or_Promise) {
               throw new Error(`XSLT Transformation failed. See console for details.`);
           }
 
-          // 5. Convert the result pointer (char*) back to a JS string.
-          const resultString = readStringFromHeap(resultPtr);
+          const finishProcessing = (resultPtr) => {
+            // 5. Convert the result pointer (char*) back to a JS string.
+            const resultString = readStringFromHeap(resultPtr);
 
-          // 6. Free the result pointer itself, which was allocated by the C code.
-          wasm_free(resultPtr);
+            // 6. Free the result pointer itself, which was allocated by the C code.
+            wasm_free(resultPtr);
 
-          return resultString;
+            return resultString;
+          };
 
+          if (resultPtr_or_Promise instanceof Promise) {
+            if (!allowAsync) {
+              resultPtr_or_Promise.then((resultPtr) => {
+                finishProcessing(resultPtr);
+                showError('This XSLT transformation contains includes. These aren\'t supported for synchronous XSLTProcessor methods.');
+              });
+              return '';
+            }
+            // Return a Promise that resolves to the finished string
+            return resultPtr_or_Promise.then(resultPtr => finishProcessing(resultPtr));
+          }
+          // Not a promise - just return the finished value.
+          return finishProcessing(resultPtr_or_Promise);
       } finally {
           // 7. Clean up all allocated memory to prevent memory leaks in the Wasm heap.
           if (xmlPtr) wasm_free(xmlPtr);
@@ -247,7 +258,7 @@
             throw new Error("XSLTProcessor: Stylesheet not imported.");
         }
         const sourceXml = (new XMLSerializer()).serializeToString(source);
-        return transformXmlWithXslt(sourceXml, this.#stylesheetText, this.#parameters, this.#stylesheetBaseUrl);
+        return transformXmlWithXslt(sourceXml, this.#stylesheetText, this.#parameters, this.#stylesheetBaseUrl, /*allowAsync*/false);
       }
 
       transformToDocument(source) {
@@ -356,7 +367,7 @@
       // Process XML/XSLT and replace the document.
       let resultHtml;
       try {
-        resultHtml = transformXmlWithXslt(xmlBytes, compiledXsltText, null, xsltUrl.href);
+        resultHtml = await transformXmlWithXslt(xmlBytes, compiledXsltText, null, xsltUrl.href, /*allowAsync*/true);
       } catch (e) {
         return showError(`Error processing XML/XSLT: ${e}`);
       }

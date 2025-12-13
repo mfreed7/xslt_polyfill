@@ -91,6 +91,10 @@ Note that as of now, there are a few things that don't work perfectly:
    requests are subject to CORS, which might block the request. The browser-
    native XSLT processor is able to load these resources, despite the CORS
    violation, leading to a behavior difference.
+ - Similarly, since fetch() needs to be used for included/imported resources,
+   and the fetch API is asynchronous, the (synchronous) XSLTProcessor methods
+   will fail in this case. I don't have a great solution for this, other than
+   perhaps to make `XSLTProcessorAsync` which has async versions of its methods.
  - The Wasm code is embedded into a single file, for ease-of-use and file size,
    via the emcc SINGLE_FILE option. This means that the encoding must be UTF-8
    or that resource will be incorrectly decoded.
