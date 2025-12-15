@@ -1,16 +1,14 @@
 const testCases = [
 {
     name: 'Basic Transformation',
-    xml: `
-        <?xml version="1.0"?>
+    xml: `<?xml version="1.0"?>
         <?xml-stylesheet type="text/xsl" href="{{XSL_HREF}}"?>
         <page>
             {{SCRIPT_INJECTION_LOCATION}}
             <message>FAIL</message>
         </page>
     `,
-    xsl: `
-        <?xml version="1.0" encoding="UTF-8"?>
+    xsl: `<?xml version="1.0" encoding="UTF-8"?>
         <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
         <xsl:output method="html"/>
         <xsl:template match="/">
@@ -20,16 +18,14 @@ const testCases = [
 },
 {
     name: 'EXSLT Support',
-    xml: `
-        <?xml version="1.0"?>
+    xml: `<?xml version="1.0"?>
         <?xml-stylesheet type="text/xsl" href="{{XSL_HREF}}"?>
         <page>
             {{SCRIPT_INJECTION_LOCATION}}
             <first>FAIL</first>
             <message>PASS</message>
         </page>`,
-    xsl: `
-        <xsl:stylesheet version="1.0"
+    xsl: `<xsl:stylesheet version="1.0"
             xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
             xmlns:exsl="http://exslt.org/common">
         <xsl:output method="html"/>
@@ -52,16 +48,13 @@ const testCases = [
 },
 {
     name: 'Script Execution in Output',
-    xml: `
-        <?xml version="1.0" encoding="UTF-8"?>
+    xml: `<?xml version="1.0" encoding="UTF-8"?>
         <?xml-stylesheet type="text/xsl" href="{{XSL_HREF}}"?>
         <document>
             {{SCRIPT_INJECTION_LOCATION}}
             FAIL
         </document>`,
-    xsl: `
-        <?xml version="1.0" encoding="UTF-8"?>
-        <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+    xsl: `<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
             <xsl:output method="html"/>
             <xsl:template match="/">
                 <body>
@@ -77,15 +70,13 @@ const testCases = [
 },
 {
     name: 'document(\'\') Functionality',
-    xml: `
-        <?xml version="1.0"?>
+    xml: `<?xml version="1.0"?>
         <?xml-stylesheet type="text/xsl" href="{{XSL_HREF}}"?>
         <content>
             {{SCRIPT_INJECTION_LOCATION}}
             FAIL
         </content>`,
-    xsl: `
-        <xsl:stylesheet version="1.0"
+    xsl: `<xsl:stylesheet version="1.0"
             xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
             xmlns:doc="my-document-ns"
             exclude-result-prefixes="doc">
@@ -244,6 +235,24 @@ const testCases = [
         };
         </script>
         </body>`,
+},
+{
+    name: "XML Output",
+    xml: `<?xml version="1.0"?>
+        <?xml-stylesheet type="text/xsl" href="{{XSL_HREF}}"?>
+        <content>
+            {{SCRIPT_INJECTION_LOCATION}}
+            FAIL
+        </content>`,
+    xsl: `<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+        <xsl:output method="xml"/>
+        <xsl:template match="/">
+            <body>
+                <div xmlns="http://www.w3.org/1999/xhtml" style="display:none"/>
+                <div xmlns="http://www.w3.org/1999/xhtml" style="color:green">PASS</div>
+            </body>
+        </xsl:template>
+        </xsl:stylesheet>`,
 }
 ];
 
