@@ -270,7 +270,11 @@
       transformToFragment(source, document) {
         const doc = this.transformToDocument(source);
         const fragment = document.createDocumentFragment();
-        fragment.appendChild(doc.documentElement);
+        // The transformToFragment method flattens the elements from the <head>
+        // and <body> into a flat list.
+        const head = doc.firstElementChild?.firstElementChild;
+        const body = head?.nextElementSibling;
+        fragment.append(...head?.childNodes,...body?.childNodes);
         return fragment;
       }
 

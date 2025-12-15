@@ -108,11 +108,11 @@ const testCases = [
         <div id="target"></div>
         <script>
         window.onload = () => {
-            const xmlString = \`<page>
+            const xml = \`<page>
                 <first>FAIL</first>
                 <message>PASS</message>
             </page>\`;
-            const xslString = \`<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+            const xsl = \`<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
                 <xsl:template match="/">
                 <xsl:apply-templates select="/page/message"/>
                 </xsl:template>
@@ -122,8 +122,8 @@ const testCases = [
             </xsl:stylesheet>\`;
 
             const parser = new window.DOMParser();
-            const xmlDoc = parser.parseFromString(xmlString, "application/xml");
-            const xslDoc = parser.parseFromString(xslString, "application/xml");
+            const xmlDoc = parser.parseFromString(xml, "application/xml");
+            const xslDoc = parser.parseFromString(xsl, "application/xml");
             const xsltProcessor = new window.XSLTProcessor();
             xsltProcessor.importStylesheet(xslDoc);
             const fragment = xsltProcessor.transformToFragment(xmlDoc, document);
@@ -142,24 +142,103 @@ const testCases = [
         <div id="target" style="color:green"></div>
         <script>
         window.onload = () => {
-            const xmlString = \`<?xml version="1.0" encoding="utf-8"?>
-                <page>
-                    <first>FAIL</first>
-                </page>\`;
-            const xslString = \`<?xml version="1.0" encoding="utf-8"?>
-                <xsl:stylesheet xmlns:xsl="http://www.w3.org/1999/XSL/Transform" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.0" exclude-result-prefixes="xsl">
+            const xml = \`<?xml version="1.0" encoding="utf-8"?>
+                <page><first>FAIL</first></page>\`;
+            const xsl = \`<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
                 <xsl:output method="html"/>
                 <xsl:template match="/"> </xsl:template>
                 </xsl:stylesheet>\`;
-
             const parser = new window.DOMParser();
-            const xmlDoc = parser.parseFromString(xmlString, "application/xml");
-            const xslDoc = parser.parseFromString(xslString, "application/xml");
+            const xmlDoc = parser.parseFromString(xml, "application/xml");
+            const xslDoc = parser.parseFromString(xsl, "application/xml");
             const xsltProcessor = new window.XSLTProcessor();
             xsltProcessor.importStylesheet(xslDoc);
-            var separateDocument = document.implementation.createDocument('', '', null);
-            const fragment = xsltProcessor.transformToFragment(xmlDoc, separateDocument);
+            const fragment = xsltProcessor.transformToFragment(xmlDoc, document);
             if (fragment instanceof DocumentFragment) {
+                document.getElementById("target").textContent = 'PASS';
+            }
+        };
+        </script>
+        </body>`,
+},
+{
+    name: 'transformToFragment structure',
+    html: `
+        <!DOCTYPE html>
+        <body>
+        {{SCRIPT_INJECTION_LOCATION}}
+        <div id="target" style="color:green">FAIL</div>
+        <script>
+        window.onload = () => {
+            const xml = \`<?xml version="1.0" encoding="utf-8"?>
+                <page><first>FAIL</first></page>\`;
+            const xsl = \`<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+                <xsl:output method="html"/>
+                <xsl:template match="/">
+                <html>
+                    <head>
+                        <title>PASS</title>
+                    </head>
+                    <body>
+                        <div>PASS</div>
+                    </body>
+                </html>
+                </xsl:template>
+                </xsl:stylesheet>\`;
+            const parser = new window.DOMParser();
+            const xmlDoc = parser.parseFromString(xml, "application/xml");
+            const xslDoc = parser.parseFromString(xsl, "application/xml");
+            const xsltProcessor = new window.XSLTProcessor();
+            xsltProcessor.importStylesheet(xslDoc);
+            const fragment = xsltProcessor.transformToFragment(xmlDoc, document);
+            if (fragment.children.length === 3 &&
+                fragment.children[0] instanceof HTMLMetaElement &&
+                fragment.children[1] instanceof HTMLTitleElement &&
+                fragment.children[2] instanceof HTMLDivElement) {
+                document.getElementById("target").textContent = 'PASS';
+            }
+        };
+        </script>
+        </body>`,
+},
+{
+    name: 'transformToDocument structure',
+    html: `
+        <!DOCTYPE html>
+        <body>
+        {{SCRIPT_INJECTION_LOCATION}}
+        <div id="target" style="color:green">FAIL</div>
+        <script>
+        window.onload = () => {
+            const xml = \`<?xml version="1.0" encoding="utf-8"?>
+                <page><first>FAIL</first></page>\`;
+            const xsl = \`<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+                <xsl:output method="html"/>
+                <xsl:template match="/">
+                <html>
+                    <head>
+                        <title>PASS</title>
+                    </head>
+                    <body>
+                        <div>PASS</div>
+                    </body>
+                </html>
+                </xsl:template>
+                </xsl:stylesheet>\`;
+            const parser = new window.DOMParser();
+            const xmlDoc = parser.parseFromString(xml, "application/xml");
+            const xslDoc = parser.parseFromString(xsl, "application/xml");
+            const xsltProcessor = new window.XSLTProcessor();
+            xsltProcessor.importStylesheet(xslDoc);
+            const newDocument = xsltProcessor.transformToDocument(xmlDoc);
+            const html = newDocument.firstElementChild;
+            const head = html?.firstElementChild;
+            const body = head?.nextElementSibling;
+            if (html instanceof HTMLHtmlElement &&
+                head instanceof HTMLHeadElement &&
+                body instanceof HTMLBodyElement &&
+                head?.children?.length === 2 &&
+                body?.children?.length === 1) {
                 document.getElementById("target").textContent = 'PASS';
             }
         };
