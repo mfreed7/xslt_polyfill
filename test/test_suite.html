@@ -49,10 +49,16 @@
 </html>
 
 <script>
-  function addTestResult(name, iframe) {
+  function addTestResult(name, iframe, url) {
     const row = document.createElement('tr');
     const nameCell = document.createElement('td');
-    nameCell.textContent = name;
+    nameCell.textContent = name + ' ';
+    const link = document.createElement('a');
+    link.href = url;
+    link.target = '_blank';
+    link.title = 'Open test file in new tab';
+    link.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle;"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>';
+    nameCell.appendChild(link);
     row.appendChild(nameCell);
     const outputCell = document.createElement('td');
     outputCell.appendChild(iframe);
@@ -71,7 +77,7 @@
     const iframe = document.createElement('iframe');
     let url = testCase.html ? testCase.html : testCase.xml;
     iframe.src = url;
-    return iframe;
+    return {iframe, url};
   }
 
   let nativeSupported = ('XSLTProcessor' in window) && window.XSLTProcessor.toString().includes('native code');
@@ -87,8 +93,8 @@
     document.getElementById('results').querySelector('tbody').innerHTML = '';
     const mode = modeElement.value;
     for (const testCase of testCases) {
-      const iframe = runTest(testCase, mode);
-      addTestResult(testCase.name, iframe);
+      const {iframe,url} = runTest(testCase, mode);
+      addTestResult(testCase.name, iframe, url);
     }
   }
 
