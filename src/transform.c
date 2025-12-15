@@ -183,9 +183,18 @@ char* transform(const char* xml_content, int xml_len, const char* xslt_content, 
     // 6. Serialize the result document to a string.
     xmlChar* result_buffer = NULL;
     int result_len = 0;
-    xsltSaveResultToString(&result_buffer, &result_len, result_doc, xslt_sheet);
+    int bytes_written = xsltSaveResultToString(&result_buffer, &result_len, result_doc, xslt_sheet);
 
-    if (result_buffer == NULL) {
+    if (bytes_written == 0 && result_buffer == NULL) {
+        // If the output is empty, xsltSaveResultToString might return success (0)
+        // but not allocate a buffer. We need to return an empty string, not NULL.
+        result_buffer = (xmlChar*) malloc(1);
+        if (result_buffer) {
+            result_buffer[0] = '\0';
+        }
+    }
+
+    if (!result_buffer) {
         printf("XSLT Transformation Error: Failed to serialize result document to string.\n");
         goto cleanup;
     }
