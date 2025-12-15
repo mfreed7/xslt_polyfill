@@ -131,9 +131,41 @@ const testCases = [
             document.getElementById("target").appendChild(div);
         };
         </script>
-        </body>
-    `,
+        </body>`,
 },
+{
+    name: 'Blank result',
+    html: `
+        <!DOCTYPE html>
+        <body>
+        {{SCRIPT_INJECTION_LOCATION}}
+        <div id="target" style="color:green"></div>
+        <script>
+        window.onload = () => {
+            const xmlString = \`<?xml version="1.0" encoding="utf-8"?>
+                <page>
+                    <first>FAIL</first>
+                </page>\`;
+            const xslString = \`<?xml version="1.0" encoding="utf-8"?>
+                <xsl:stylesheet xmlns:xsl="http://www.w3.org/1999/XSL/Transform" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.0" exclude-result-prefixes="xsl">
+                <xsl:output method="html"/>
+                <xsl:template match="/"> </xsl:template>
+                </xsl:stylesheet>\`;
+
+            const parser = new window.DOMParser();
+            const xmlDoc = parser.parseFromString(xmlString, "application/xml");
+            const xslDoc = parser.parseFromString(xslString, "application/xml");
+            const xsltProcessor = new window.XSLTProcessor();
+            xsltProcessor.importStylesheet(xslDoc);
+            var separateDocument = document.implementation.createDocument('', '', null);
+            const fragment = xsltProcessor.transformToFragment(xmlDoc, separateDocument);
+            if (fragment instanceof DocumentFragment) {
+                document.getElementById("target").textContent = 'PASS';
+            }
+        };
+        </script>
+        </body>`,
+}
 ];
 
 
