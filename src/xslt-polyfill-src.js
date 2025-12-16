@@ -63,8 +63,10 @@
 
     function getOutputMimeType(stylesheet) {
       const output = stylesheet.getElementsByTagNameNS ? stylesheet.getElementsByTagNameNS('http://www.w3.org/1999/XSL/Transform', 'output')[0] : null;
-      const method = output ? output.getAttribute('method') : 'xml';
-      return (method === 'html') ? 'text/html' : 'text/xml';
+      const method = output ? output.getAttribute('method').toLowerCase() : 'xml';
+      if (method === 'html') return 'text/html';
+      if (method === 'text') return 'text/plain';
+      return 'application/xml';
     }
 
     // Recursively fetches and inlines <xsl:import> statements within an XSLT document.
@@ -271,7 +273,11 @@
 
       transformToDocument(source) {
         const output = this.transformToText(source);
-        return (new DOMParser()).parseFromString(output, this.#outputMimeType || 'text/xml');
+        if (this.#outputMimeType === 'text/plain') {
+          const escapedOutput = output.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+          return (new DOMParser()).parseFromString(`<pre>${escapedOutput}</pre>`, 'text/html');
+        }
+        return (new DOMParser()).parseFromString(output, this.#outputMimeType || 'application/xml');
       }
 
       transformToFragment(source, document) {
@@ -412,6 +418,11 @@
     }
 
     function unsafeReplaceDocumentWithHtml(targetElement, htmlString, mimeType) {
+      if (mimeType === 'text/plain') {
+        const escaped = htmlString.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        htmlString = `<pre>${escaped}</pre>`;
+        mimeType = 'text/html';
+      }
       // First parse the document and move content to a fragment.
       const parsedDoc = (new DOMParser()).parseFromString(htmlString, mimeType || 'text/html');
       const fragment = document.createDocumentFragment();

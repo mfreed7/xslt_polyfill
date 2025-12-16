@@ -289,6 +289,42 @@ const testCases = [
             </body>
         </xsl:template>
         </xsl:stylesheet>`,
+},
+{
+    name: 'Text Output',
+    html: `
+        <!DOCTYPE html>
+        <body>
+        {{SCRIPT_INJECTION_LOCATION}}
+        <div id="target" style="color:green">FAIL</div>
+        <script>
+        window.onload = () => {
+            const xml = \`<page>Text</page>\`;
+            const xsl = \`<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+                <xsl:output method="text"/>
+                <xsl:template match="/">
+                <xsl:value-of select="/page"/>
+                </xsl:template>
+            </xsl:stylesheet>\`;
+
+            const parser = new window.DOMParser();
+            const xmlDoc = parser.parseFromString(xml, "application/xml");
+            const xslDoc = parser.parseFromString(xsl, "application/xml");
+            const xsltProcessor = new window.XSLTProcessor();
+            xsltProcessor.importStylesheet(xslDoc);
+            const newDocument = xsltProcessor.transformToDocument(xmlDoc);
+            
+            // Check if result is wrapped in <pre>
+            const html = newDocument.firstElementChild;
+            const body = html?.firstElementChild?.nextElementSibling;
+            const pre = body?.firstElementChild;
+            if (pre instanceof HTMLPreElement &&
+                pre.textContent === 'Text') {
+                document.getElementById("target").textContent = 'PASS';
+            }
+        };
+        </script>
+        </body>`,
 }
 ];
 
