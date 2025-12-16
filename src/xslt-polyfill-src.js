@@ -63,7 +63,7 @@
 
     function getOutputMimeType(stylesheet) {
       const output = stylesheet.getElementsByTagNameNS ? stylesheet.getElementsByTagNameNS('http://www.w3.org/1999/XSL/Transform', 'output')[0] : null;
-      const method = output ? output.getAttribute('method') : 'html';
+      const method = output ? output.getAttribute('method') : 'xml';
       return (method === 'html') ? 'text/html' : 'text/xml';
     }
 
@@ -271,7 +271,7 @@
 
       transformToDocument(source) {
         const output = this.transformToText(source);
-        return (new DOMParser()).parseFromString(output, this.#outputMimeType || 'text/html');
+        return (new DOMParser()).parseFromString(output, this.#outputMimeType || 'text/xml');
       }
 
       transformToFragment(source, document) {
