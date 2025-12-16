@@ -101,7 +101,90 @@ static const char* ResultMIMEType(xmlDocPtr result_doc, xsltStylesheetPtr sheet)
 
   return "application/xml";
 }
+  
+// Adjust the HTML encoding meta tag to match Chrome's behavior.
+// Libxslt's default behavior for HTML output is to insert <meta charset="UTF-8">.
+// However, Chrome inserts <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+// This function checks if the output method is HTML, and if so, ensures that
+// the HEAD element contains the http-equiv meta tag. If we insert it here,
+// libxslt (via libxml2) will detect it and update it, rather than inserting
+// a new <meta charset="..."> tag.
+static void adjust_html_encoding_meta(xmlDocPtr doc, xsltStylesheetPtr style) {
+    const xmlChar *method;
+    XSLT_GET_IMPORT_PTR(method, style, method);
 
+    if ((method == NULL) && (doc->type == XML_HTML_DOCUMENT_NODE))
+        method = (const xmlChar *) "html";
+
+    if (method == NULL || !xmlStrEqual(method, (const xmlChar *) "html")) {
+        return;
+    }
+
+    // Find HEAD
+    xmlNodePtr head = NULL;
+    xmlNodePtr cur = doc->children;
+    while(cur) {
+        if (cur->type == XML_ELEMENT_NODE && xmlStrcasecmp(cur->name, (const xmlChar*)"html") == 0) {
+            xmlNodePtr child = cur->children;
+            while(child) {
+                if (child->type == XML_ELEMENT_NODE && xmlStrcasecmp(child->name, (const xmlChar*)"head") == 0) {
+                    head = child;
+                    break;
+                }
+                child = child->next;
+            }
+            break;
+        }
+        cur = cur->next;
+    }
+
+    if (!head) return;
+
+    // Check existing meta tags
+    xmlNodePtr child = head->children;
+    int has_encoding = 0;
+    while(child) {
+        if (child->type == XML_ELEMENT_NODE && xmlStrcasecmp(child->name, (const xmlChar*)"meta") == 0) {
+            xmlChar* val = xmlGetProp(child, (const xmlChar*)"charset");
+            if (val) {
+                has_encoding = 1;
+                xmlFree(val);
+                break;
+            }
+            val = xmlGetProp(child, (const xmlChar*)"http-equiv");
+            if (val) {
+                if (xmlStrcasecmp(val, (const xmlChar*)"Content-Type") == 0) {
+                    has_encoding = 1;
+                }
+                xmlFree(val);
+                if (has_encoding) break;
+            }
+        }
+        child = child->next;
+    }
+
+    if (!has_encoding) {
+        const xmlChar *encoding;
+        XSLT_GET_IMPORT_PTR(encoding, style, encoding);
+        if (encoding == NULL) encoding = (const xmlChar*)"UTF-8";
+
+        // Construct content string: text/html; charset=ENCODING
+        xmlChar* contentValue = xmlStrdup((const xmlChar*)"text/html; charset=");
+        contentValue = xmlStrcat(contentValue, encoding);
+
+        xmlNodePtr meta = xmlNewDocNode(doc, NULL, (const xmlChar*)"meta", NULL);
+        xmlNewProp(meta, (const xmlChar*)"http-equiv", (const xmlChar*)"Content-Type");
+        xmlNewProp(meta, (const xmlChar*)"content", contentValue);
+        xmlFree(contentValue);
+
+        if (head->children) {
+            xmlAddPrevSibling(head->children, meta);
+        } else {
+            xmlAddChild(head, meta);
+        }
+    }
+}
+  
 /**
  * @brief Transforms an XML string using an XSLT string.
  *
@@ -203,7 +286,10 @@ char* transform(const char* xml_content, int xml_len, const char* xslt_content, 
     strncpy(out_mime_type, mime, 32);
     out_mime_type[31] = '\0';
 
-    // 6. Serialize the result document to a string.
+    // 6. Ensure the HTML meta tag for encoding is in the Chrome/Blink format.
+    adjust_html_encoding_meta(result_doc, xslt_sheet);
+
+    // 7. Serialize the result document to a string.
     xmlChar* result_buffer = NULL;
     int result_len = 0;
     int bytes_written = xsltSaveResultToString(&result_buffer, &result_len, result_doc, xslt_sheet);

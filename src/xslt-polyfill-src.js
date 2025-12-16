@@ -290,10 +290,14 @@
         }
         const sourceXml = (new XMLSerializer()).serializeToString(source);
         const {content, mimeType} = transformXmlWithXslt(sourceXml, this.#stylesheetText, this.#parameters, this.#stylesheetBaseUrl, /*allowAsync*/false, /*buildPlainText*/false);
+        const fragment = document.createDocumentFragment();
+        if (mimeType === 'text/plain') {
+          fragment.append(content);
+          return fragment;
+        }
         const doc = (new DOMParser()).parseFromString(content, mimeType);
         // The transformToFragment method flattens head/body into a flat list.
         // Note this comment: https://source.chromium.org/chromium/chromium/src/+/main:third_party/blink/renderer/core/editing/serializers/serialization.cc;l=776;drc=7666bc1983c2a5b98e5dc6fa6c28f8f53c07d06f
-        const fragment = document.createDocumentFragment();
         const html = doc.firstElementChild instanceof HTMLHtmlElement ? doc.firstElementChild : undefined;
         const head = html?.firstElementChild;
         const body = head?.nextElementSibling;

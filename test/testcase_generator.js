@@ -22,7 +22,7 @@ const testCases = [
         <?xml-stylesheet type="text/xsl" href="{{XSL_HREF}}"?>
         <page>
             {{SCRIPT_INJECTION_LOCATION}}
-            <message>FAIL</message>
+            <message>FAIL!!!</message>
         </page>
     `,
     xsl: `<?xml version="1.0" encoding="UTF-8"?>
@@ -39,7 +39,7 @@ const testCases = [
         <?xml-stylesheet type="text/xsl" href="{{XSL_HREF}}"?>
         <page>
             {{SCRIPT_INJECTION_LOCATION}}
-            <first>FAIL</first>
+            <first>FAIL!!!</first>
             <message>PASS</message>
         </page>`,
     xsl: `<xsl:stylesheet version="1.0"
@@ -69,7 +69,7 @@ const testCases = [
         <?xml-stylesheet type="text/xsl" href="{{XSL_HREF}}"?>
         <document>
             {{SCRIPT_INJECTION_LOCATION}}
-            FAIL
+            FAIL!!!
         </document>`,
     xsl: `<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
             <xsl:output method="html"/>
@@ -91,7 +91,7 @@ const testCases = [
         <?xml-stylesheet type="text/xsl" href="{{XSL_HREF}}"?>
         <content>
             {{SCRIPT_INJECTION_LOCATION}}
-            FAIL
+            FAIL!!!
         </content>`,
     xsl: `<xsl:stylesheet version="1.0"
             xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
@@ -117,7 +117,7 @@ const testCases = [
         <script>
         window.onload = () => {
             const xml = \`<?xml version="1.0" encoding="utf-8"?>
-                <page><first>FAIL</first></page>\`;
+                <page><first>FAIL!!!</first></page>\`;
             const xsl = \`<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
                 <xsl:output method="html"/>
                 <xsl:template match="/"> </xsl:template>
@@ -141,11 +141,11 @@ const testCases = [
         <!DOCTYPE html>
         <body>
         {{SCRIPT_INJECTION_LOCATION}}
-        <div id="target" style="color:green">FAIL</div>
+        <div id="target" style="color:green">FAIL!!!</div>
         <script>
         window.onload = () => {
             const xml = \`<?xml version="1.0" encoding="utf-8"?>
-                <page>FAIL</page>\`;
+                <page>FAIL!!!</page>\`;
             const xsl = \`<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
                 <xsl:output method="html"/>
                 <xsl:template match="/">
@@ -159,12 +159,12 @@ const testCases = [
             const {xsltProcessor,xmlDoc} = initProcessor(xml,xsl);
             const fragment = toFlatString(xsltProcessor.transformToFragment(xmlDoc, document));
             if (fragment !== '<metahttp-equiv="Content-Type"content="text/html;charset=UTF-8"><title>PASS</title><div>PASS</div>') {
-                document.getElementById("target").textContent = 'FAIL';
+                document.getElementById("target").textContent = 'FAIL!!!';
                 return;
             }
             const doc = toFlatString(xsltProcessor.transformToDocument(xmlDoc));
             if (doc !== '<html><head><metahttp-equiv="Content-Type"content="text/html;charset=UTF-8"><title>PASS</title></head><body><div>PASS</div></body></html>') {
-                document.getElementById("target").textContent = 'FAIL';
+                document.getElementById("target").textContent = 'FAIL!!!';
                 return;
             }
             document.getElementById("target").textContent = 'PASS';
@@ -177,11 +177,11 @@ const testCases = [
         <!DOCTYPE html>
         <body>
         {{SCRIPT_INJECTION_LOCATION}}
-        <div id="target" style="color:green">FAIL</div>
+        <div id="target" style="color:green">FAIL!!!</div>
         <script>
         window.onload = () => {
             const xml = \`<?xml version="1.0" encoding="utf-8"?>
-                <page>FAIL</page>\`;
+                <page>FAIL!!!</page>\`;
             const xsl = \`<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
                 <xsl:output method="xml"/>
                 <xsl:template match="/">
@@ -195,12 +195,12 @@ const testCases = [
             const {xsltProcessor,xmlDoc} = initProcessor(xml,xsl);
             const fragment = toFlatString(xsltProcessor.transformToFragment(xmlDoc, document));
             if (fragment !== '<html><head><title>PASS</title></head><body><div>PASS</div></body></html>') {
-                document.getElementById("target").textContent = 'FAIL';
+                document.getElementById("target").textContent = 'FAIL!!!';
                 return;
             }
             const doc = toFlatString(xsltProcessor.transformToDocument(xmlDoc));
             if (doc !== '<html><head><title>PASS</title></head><body><div>PASS</div></body></html>') {
-                document.getElementById("target").textContent = 'FAIL';
+                document.getElementById("target").textContent = 'FAIL!!!';
                 return;
             }
             document.getElementById("target").textContent = 'PASS';
@@ -213,11 +213,11 @@ const testCases = [
         <!DOCTYPE html>
         <body>
         {{SCRIPT_INJECTION_LOCATION}}
-        <div id="target" style="color:green">FAIL</div>
+        <div id="target" style="color:green">FAIL!!!</div>
         <script>
         window.onload = () => {
             const xml = \`<?xml version="1.0" encoding="utf-8"?>
-                <page>FAIL</page>\`;
+                <page>FAIL!!!</page>\`;
             const xsl = \`<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
                 <xsl:output method="text"/>
                 <xsl:template match="/">
@@ -231,12 +231,12 @@ const testCases = [
             const {xsltProcessor,xmlDoc} = initProcessor(xml,xsl);
             const fragment = toFlatString(xsltProcessor.transformToFragment(xmlDoc, document));
             if (fragment !== 'PASSPASS') {
-                document.getElementById("target").textContent = 'FAIL';
+                document.getElementById("target").textContent = 'FAIL!!!';
                 return;
             }
             const doc = toFlatString(xsltProcessor.transformToDocument(xmlDoc));
             if (doc !== '<htmlxmlns="http://www.w3.org/1999/xhtml"><head><title></title></head><body><pre>PASSPASS</pre></body></html>') {
-                document.getElementById("target").textContent = 'FAIL';
+                document.getElementById("target").textContent = 'FAIL!!!';
                 return;
             }
             document.getElementById("target").textContent = 'PASS';
@@ -249,11 +249,11 @@ const testCases = [
         <!DOCTYPE html>
         <body>
         {{SCRIPT_INJECTION_LOCATION}}
-        <div id="target" style="color:green">FAIL</div>
+        <div id="target" style="color:green">FAIL!!!</div>
         <script>
         window.onload = () => {
             const xml = \`<?xml version="1.0" encoding="utf-8"?>
-                <page>FAIL</page>\`;
+                <page>FAIL!!!</page>\`;
             const xsl = \`<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
                 <xsl:template match="/">
                 <html>
@@ -266,12 +266,12 @@ const testCases = [
             const {xsltProcessor,xmlDoc} = initProcessor(xml,xsl);
             const fragment = toFlatString(xsltProcessor.transformToFragment(xmlDoc, document));
             if (fragment !== '<metahttp-equiv="Content-Type"content="text/html;charset=UTF-8"><title>PASS</title><div>PASS</div>') {
-                document.getElementById("target").textContent = 'FAIL';
+                document.getElementById("target").textContent = 'FAIL!!!';
                 return;
             }
             const doc = toFlatString(xsltProcessor.transformToDocument(xmlDoc));
             if (doc !== '<html><head><metahttp-equiv="Content-Type"content="text/html;charset=UTF-8"><title>PASS</title></head><body><div>PASS</div></body></html>') {
-                document.getElementById("target").textContent = 'FAIL';
+                document.getElementById("target").textContent = 'FAIL!!!';
                 return;
             }
             document.getElementById("target").textContent = 'PASS';
@@ -284,11 +284,11 @@ const testCases = [
         <!DOCTYPE html>
         <body>
         {{SCRIPT_INJECTION_LOCATION}}
-        <div id="target" style="color:green">FAIL</div>
+        <div id="target" style="color:green">FAIL!!!</div>
         <script>
         window.onload = () => {
             const xml = \`<?xml version="1.0" encoding="utf-8"?>
-                <page>FAIL</page>\`;
+                <page>FAIL!!!</page>\`;
             const xsl = \`<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
                 <xsl:template match="/">
                 <root>
@@ -300,12 +300,12 @@ const testCases = [
             const {xsltProcessor,xmlDoc} = initProcessor(xml,xsl);
             const fragment = toFlatString(xsltProcessor.transformToFragment(xmlDoc, document));
             if (fragment !== '<root><div>PASS</div></root>') {
-                document.getElementById("target").textContent = 'FAIL';
+                document.getElementById("target").textContent = 'FAIL!!!';
                 return;
             }
             const doc = toFlatString(xsltProcessor.transformToDocument(xmlDoc));
             if (doc !== '<root><div>PASS</div></root>') {
-                document.getElementById("target").textContent = 'FAIL';
+                document.getElementById("target").textContent = 'FAIL!!!';
                 return;
             }
             document.getElementById("target").textContent = 'PASS';
@@ -318,11 +318,11 @@ const testCases = [
         <!DOCTYPE html>
         <body>
         {{SCRIPT_INJECTION_LOCATION}}
-        <div id="target" style="color:green">FAIL</div>
+        <div id="target" style="color:green">FAIL!!!</div>
         <script>
         window.onload = () => {
             const xml = \`<?xml version="1.0" encoding="utf-8"?>
-                <page><first>FAIL</first></page>\`;
+                <page><first>FAIL!!!</first></page>\`;
             const xsl = \`<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
                 <xsl:output method="html"/>
                 <xsl:template match="/">
@@ -362,7 +362,7 @@ const testCases = [
         <?xml-stylesheet type="text/xsl" href="{{XSL_HREF}}"?>
         <content>
             {{SCRIPT_INJECTION_LOCATION}}
-            FAIL
+            FAIL!!!
         </content>`,
     xsl: `<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
         <xsl:output method="xml"/>
@@ -380,7 +380,7 @@ const testCases = [
         <!DOCTYPE html>
         <body>
         {{SCRIPT_INJECTION_LOCATION}}
-        <div id="target" style="color:green">FAIL</div>
+        <div id="target" style="color:green">FAIL!!!</div>
         <script>
         window.onload = () => {
             const xml = \`<page>Text</page>\`;
