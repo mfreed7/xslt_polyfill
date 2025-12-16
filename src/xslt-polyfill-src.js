@@ -61,14 +61,6 @@
       return false;
     }
 
-    function getOutputMimeType(stylesheet) {
-      const output = stylesheet.getElementsByTagNameNS ? stylesheet.getElementsByTagNameNS('http://www.w3.org/1999/XSL/Transform', 'output')[0] : null;
-      const method = output ? output.getAttribute('method').toLowerCase() : 'xml';
-      if (method === 'html') return 'text/html';
-      if (method === 'text') return 'text/plain';
-      return 'application/xml';
-    }
-
     // Recursively fetches and inlines <xsl:import> statements within an XSLT document.
     // This function is destructive and will modify the provided `xsltsheet` document.
     // The `xsltsheet` parameter is the XSLT document to process, and `relurl` is the
@@ -117,7 +109,7 @@
       return xsltsheet;
     }
 
-    function transformXmlWithXslt(xmlContent, xsltContent, parameters, xsltUrl, allowAsync) {
+    function transformXmlWithXslt(xmlContent, xsltContent, parameters, xsltUrl, allowAsync, buildPlainText) {
       if (!wasm_transform || !WasmModule) {
         throw new Error(`Polyfill XSLT Wasm module not yet loaded. Please wait for the ${promiseName} promise to resolve.`);
       }
@@ -129,6 +121,7 @@
       let xsltPtr = 0;
       let paramsPtr = 0;
       let xsltUrlPtr = 0;
+      let mimeTypePtr = 0;
       const paramStringPtrs = [];
 
       // Helper to write byte arrays to Wasm memory manually.
@@ -205,21 +198,38 @@
           xmlPtr = writeBytesToHeap(xmlBytes);
           xsltPtr = writeBytesToHeap(xsltBytes);
           xsltUrlPtr = writeStringToHeap(xsltUrl);
+          
+          // Allocate memory for the output mime type (minimum 32 bytes).
+          mimeTypePtr = WasmModule._malloc(32);
+          if (!mimeTypePtr) throw new Error("Wasm malloc failed for mimeType pointer.");
+          new Uint8Array(WasmModule.wasmMemory.buffer, mimeTypePtr, 32).fill(0);
+
 
           // 4. Call the C function with pointers to the data in Wasm memory.
-          const resultPtr_or_Promise = wasm_transform(xmlPtr, xmlBytes.byteLength, xsltPtr, xsltBytes.byteLength, paramsPtr, xsltUrlPtr);
+          const resultPtr_or_Promise = wasm_transform(xmlPtr, xmlBytes.byteLength, xsltPtr, xsltBytes.byteLength, paramsPtr, xsltUrlPtr, mimeTypePtr);
           if (!resultPtr_or_Promise) {
               throw new Error(`XSLT Transformation failed. See console for details.`);
           }
 
           const finishProcessing = (resultPtr) => {
-            // 5. Convert the result pointer (char*) back to a JS string.
-            const resultString = readStringFromHeap(resultPtr);
+            // 5. Convert the result pointers (char*) back to JS strings.
+            let resultString = readStringFromHeap(resultPtr);
+            let mimeTypeString = readStringFromHeap(mimeTypePtr);
 
             // 6. Free the result pointer itself, which was allocated by the C code.
             wasm_free(resultPtr);
 
-            return resultString;
+            // 7. Handle the plain text case, if needed.
+            if (buildPlainText && mimeTypeString === 'text/plain') {
+              resultString = resultString.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+              resultString = `<html xmlns="http://www.w3.org/1999/xhtml">\n<head><title></title></head>\n<body>\n<pre>${resultString}</pre>\n</body>\n</html>`;
+              mimeTypeString = 'application/xml';
+            }
+
+            return {
+                content: resultString,
+                mimeType: mimeTypeString
+            };
           };
 
           if (resultPtr_or_Promise instanceof Promise) {
@@ -228,18 +238,19 @@
                 finishProcessing(resultPtr);
                 showError('This XSLT transformation contains includes. These aren\'t supported for synchronous XSLTProcessor methods.');
               });
-              return '';
+              return { content: '', mimeType: 'application/xml' };
             }
-            // Return a Promise that resolves to the finished string
+            // Return a Promise that resolves to the finished object
             return resultPtr_or_Promise.then(resultPtr => finishProcessing(resultPtr));
           }
-          // Not a promise - just return the finished value.
+          // Not a promise - just return the finished object.
           return finishProcessing(resultPtr_or_Promise);
       } finally {
           // 7. Clean up all allocated memory to prevent memory leaks in the Wasm heap.
           if (xmlPtr) wasm_free(xmlPtr);
           if (xsltPtr) wasm_free(xsltPtr);
           if (xsltUrlPtr) wasm_free(xsltUrlPtr);
+          if (mimeTypePtr) wasm_free(mimeTypePtr);
           paramStringPtrs.forEach(ptr => wasm_free(ptr));
           if (paramsPtr) wasm_free(paramsPtr);
       }
@@ -250,7 +261,6 @@
       #stylesheetText = null;
       #parameters = new Map();
       #stylesheetBaseUrl = null;
-      #outputMimeType = null;
 
       constructor() {}
       isPolyfill() {
@@ -260,40 +270,52 @@
       importStylesheet(stylesheet) {
         this.#stylesheetText = (new XMLSerializer()).serializeToString(stylesheet);
         this.#stylesheetBaseUrl = stylesheet.baseURI || window.location.href;
-        this.#outputMimeType = getOutputMimeType(stylesheet);
       }
 
+      // Returns just the text.
       transformToText(source) {
         if (!this.#stylesheetText) {
             throw new Error("XSLTProcessor: Stylesheet not imported.");
         }
         const sourceXml = (new XMLSerializer()).serializeToString(source);
-        return transformXmlWithXslt(sourceXml, this.#stylesheetText, this.#parameters, this.#stylesheetBaseUrl, /*allowAsync*/false);
+        return transformXmlWithXslt(sourceXml, this.#stylesheetText, this.#parameters, this.#stylesheetBaseUrl, /*allowAsync*/false, /*buildPlainText*/false).content;
       }
 
+      // Returns a new document (XML or HTML).
       transformToDocument(source) {
-        const output = this.transformToText(source);
-        if (this.#outputMimeType === 'text/plain') {
-          const escapedOutput = output.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-          return (new DOMParser()).parseFromString(`<pre>${escapedOutput}</pre>`, 'text/html');
+        if (!this.#stylesheetText) {
+            throw new Error("XSLTProcessor: Stylesheet not imported.");
         }
-        return (new DOMParser()).parseFromString(output, this.#outputMimeType || 'application/xml');
+        const sourceXml = (new XMLSerializer()).serializeToString(source);
+        const {content, mimeType} = transformXmlWithXslt(sourceXml, this.#stylesheetText, this.#parameters, this.#stylesheetBaseUrl, /*allowAsync*/false, /*buildPlainText*/true);
+        return (new DOMParser()).parseFromString(content, mimeType);
       }
 
+      // Returns a fragment. In the case of HTML, head/body are flattened.
+      // For text output, no <pre> is generated.
       transformToFragment(source, document) {
-        const doc = this.transformToDocument(source);
-        const fragment = document.createDocumentFragment();
-
-        if (this.#outputMimeType === 'text/html') {
-          // The transformToFragment method flattens the elements from the <head>
-          // and <body> into a flat list.
-          const head = doc.firstElementChild?.firstElementChild;
-          const body = head?.nextElementSibling;
-          if (head) fragment.append(...head.childNodes);
-          if (body) fragment.append(...body.childNodes);
-        } else {
-          fragment.append(...doc.childNodes);
+        if (!this.#stylesheetText) {
+            throw new Error("XSLTProcessor: Stylesheet not imported.");
         }
+        const sourceXml = (new XMLSerializer()).serializeToString(source);
+        const {content, mimeType} = transformXmlWithXslt(sourceXml, this.#stylesheetText, this.#parameters, this.#stylesheetBaseUrl, /*allowAsync*/false, /*buildPlainText*/false);
+        const doc = (new DOMParser()).parseFromString(content, mimeType);
+        // The transformToFragment method flattens head/body into a flat list.
+        // Note this comment: https://source.chromium.org/chromium/chromium/src/+/main:third_party/blink/renderer/core/editing/serializers/serialization.cc;l=776;drc=7666bc1983c2a5b98e5dc6fa6c28f8f53c07d06f
+        const fragment = document.createDocumentFragment();
+        const html = doc.firstElementChild instanceof HTMLHtmlElement ? doc.firstElementChild : undefined;
+        const head = html?.firstElementChild;
+        const body = head?.nextElementSibling;
+        if (head) {
+          fragment.append(...head.childNodes);
+          head.remove();
+        }
+        if (body) {
+          fragment.append(...body.childNodes);
+          body.remove();
+        }
+        html?.remove();
+        fragment.append(...doc.childNodes);
         return fragment;
       }
 
@@ -317,7 +339,6 @@
       reset() {
         this.#stylesheetText = null;
         this.#stylesheetBaseUrl = null;
-        this.#outputMimeType = null;
         this.clearParameters();
       }
     }
@@ -337,7 +358,7 @@
     createXSLTTransformModule()
     .then(Module => {
         WasmModule = Module;
-        wasm_transform = Module.cwrap('transform', 'number', ['number', 'number', 'number', 'number', 'number', 'number'], { async: false });
+        wasm_transform = Module.cwrap('transform', 'number', ['number', 'number', 'number', 'number', 'number', 'number', 'number'], { async: false });
         wasm_free = Module._free;
 
         // Tell people we're ready.
@@ -387,18 +408,15 @@
       const xsltDocClone = xsltDoc.cloneNode(true);
       const compiledXsltDoc = await compileImports(xsltDocClone, xsltUrl.href);
       const compiledXsltText = new XMLSerializer().serializeToString(compiledXsltDoc);
-      const outputMimeType = getOutputMimeType(compiledXsltDoc);
 
       // Process XML/XSLT and replace the document.
-      let resultHtml;
       try {
-        resultHtml = await transformXmlWithXslt(xmlBytes, compiledXsltText, null, xsltUrl.href, /*allowAsync*/true);
+        const {content, mimeType} = await transformXmlWithXslt(xmlBytes, compiledXsltText, null, xsltUrl.href, /*allowAsync*/true, /*buildPlainText*/true);
+        // Replace the document with the result
+        replaceDoc(content, mimeType);
       } catch (e) {
         return showError(`Error processing XML/XSLT: ${e}`);
-      }
-      
-      // Replace the document with the result
-      replaceDoc(resultHtml, outputMimeType);
+      }      
     }
 
     // Replace the current document with the provided HTML.

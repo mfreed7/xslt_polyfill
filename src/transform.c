@@ -14,6 +14,7 @@
 #include <libxslt/transform.h>
 #include <libxslt/security.h>
 #include <libexslt/exslt.h>
+#include <libxslt/imports.h>
 
 // Forward declaration for our JS fetch function.
 const char* fetch_and_load_document(const char* url);
@@ -85,6 +86,22 @@ static xmlDocPtr docLoader(const xmlChar* URI, xmlDictPtr dict, int options,
     return doc;
 }
 
+// Copy of this:
+// https://source.chromium.org/chromium/chromium/src/+/main:third_party/blink/renderer/core/xml/xslt_processor_libxslt.cc;l=319;drc=936810fb4d0e0b979b156d5325a52e5b6c40b088
+static const char* ResultMIMEType(xmlDocPtr result_doc, xsltStylesheetPtr sheet) {
+  const xmlChar* result_type = NULL;
+  XSLT_GET_IMPORT_PTR(result_type, sheet, method);
+  if (!result_type && result_doc->type == XML_HTML_DOCUMENT_NODE)
+    result_type = (const xmlChar*)"html";
+
+  if (xmlStrEqual(result_type, (const xmlChar*)"html"))
+    return "text/html";
+  if (xmlStrEqual(result_type, (const xmlChar*)"text"))
+    return "text/plain";
+
+  return "application/xml";
+}
+
 /**
  * @brief Transforms an XML string using an XSLT string.
  *
@@ -99,10 +116,11 @@ static xmlDocPtr docLoader(const xmlChar* URI, xmlDictPtr dict, int options,
  * @param xslt_content A string containing the XSLT stylesheet.
  * @param params An array of key-value pairs for XSLT parameters, terminated by NULL.
  * Example: ["param1", "'value1'", "param2", "'value2'", NULL]
+ * @param out_mime_type A pointer to a buffer (at least 32 bytes) where the output MIME type will be written.
  * @return A pointer to a new string containing the transformed document, or NULL on error.
  */
 EMSCRIPTEN_KEEPALIVE
-char* transform(const char* xml_content, int xml_len, const char* xslt_content, int xslt_len, const char** params, const char* xslt_url) {
+char* transform(const char* xml_content, int xml_len, const char* xslt_content, int xslt_len, const char** params, const char* xslt_url, char* out_mime_type) {
     xmlDocPtr xml_doc = NULL;
     xmlDocPtr xslt_doc = NULL;
     xsltStylesheetPtr xslt_sheet = NULL;
@@ -179,6 +197,11 @@ char* transform(const char* xml_content, int xml_len, const char* xslt_content, 
         printf("XSLT Transformation Error: Failed to apply stylesheet to XML document (see console logs).\n");
         goto cleanup;
     }
+
+    // Determine the MIME type using the helper function
+    const char* mime = ResultMIMEType(result_doc, xslt_sheet);
+    strncpy(out_mime_type, mime, 32);
+    out_mime_type[31] = '\0';
 
     // 6. Serialize the result document to a string.
     xmlChar* result_buffer = NULL;

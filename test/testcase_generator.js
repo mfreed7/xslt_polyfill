@@ -340,7 +340,7 @@ if (!fs.existsSync(outputDir)) {
 const scriptInjections = {
   native: '',
   source: `<script src="../../dist/xslt-wasm.js" xmlns="http://www.w3.org/1999/xhtml" charset="utf-8"></script>
-    <script src="../../src/xslt-polyfill-src.js" xmlns="http://www.w3.org/1999/xhtml"><\/script>`,
+    <script src="../../src/xslt-polyfill-src.js" xmlns="http://www.w3.org/1999/xhtml"></script>`,
   minified: '<script src="../../xslt-polyfill.min.js" xmlns="http://www.w3.org/1999/xhtml" charset="utf-8"></script>',
 };
 
