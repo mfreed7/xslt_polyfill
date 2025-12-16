@@ -61,6 +61,12 @@
       return false;
     }
 
+    function getOutputMimeType(stylesheet) {
+      const output = stylesheet.getElementsByTagNameNS ? stylesheet.getElementsByTagNameNS('http://www.w3.org/1999/XSL/Transform', 'output')[0] : null;
+      const method = output ? output.getAttribute('method') : 'html';
+      return (method === 'html') ? 'text/html' : 'text/xml';
+    }
+
     // Recursively fetches and inlines <xsl:import> statements within an XSLT document.
     // This function is destructive and will modify the provided `xsltsheet` document.
     // The `xsltsheet` parameter is the XSLT document to process, and `relurl` is the
@@ -242,6 +248,7 @@
       #stylesheetText = null;
       #parameters = new Map();
       #stylesheetBaseUrl = null;
+      #outputMimeType = null;
 
       constructor() {}
       isPolyfill() {
@@ -251,6 +258,7 @@
       importStylesheet(stylesheet) {
         this.#stylesheetText = (new XMLSerializer()).serializeToString(stylesheet);
         this.#stylesheetBaseUrl = stylesheet.baseURI || window.location.href;
+        this.#outputMimeType = getOutputMimeType(stylesheet);
       }
 
       transformToText(source) {
@@ -263,18 +271,23 @@
 
       transformToDocument(source) {
         const output = this.transformToText(source);
-        // TODO: output MimeType should be detected from xsl:output method.
-        return (new DOMParser()).parseFromString(output, 'text/html');
+        return (new DOMParser()).parseFromString(output, this.#outputMimeType || 'text/html');
       }
 
       transformToFragment(source, document) {
         const doc = this.transformToDocument(source);
         const fragment = document.createDocumentFragment();
-        // The transformToFragment method flattens the elements from the <head>
-        // and <body> into a flat list.
-        const head = doc.firstElementChild?.firstElementChild;
-        const body = head?.nextElementSibling;
-        fragment.append(...head?.childNodes,...body?.childNodes);
+
+        if (this.#outputMimeType === 'text/html') {
+          // The transformToFragment method flattens the elements from the <head>
+          // and <body> into a flat list.
+          const head = doc.firstElementChild?.firstElementChild;
+          const body = head?.nextElementSibling;
+          if (head) fragment.append(...head.childNodes);
+          if (body) fragment.append(...body.childNodes);
+        } else {
+          fragment.append(...doc.childNodes);
+        }
         return fragment;
       }
 
@@ -298,6 +311,7 @@
       reset() {
         this.#stylesheetText = null;
         this.#stylesheetBaseUrl = null;
+        this.#outputMimeType = null;
         this.clearParameters();
       }
     }
@@ -367,6 +381,7 @@
       const xsltDocClone = xsltDoc.cloneNode(true);
       const compiledXsltDoc = await compileImports(xsltDocClone, xsltUrl.href);
       const compiledXsltText = new XMLSerializer().serializeToString(compiledXsltDoc);
+      const outputMimeType = getOutputMimeType(compiledXsltDoc);
 
       // Process XML/XSLT and replace the document.
       let resultHtml;
@@ -377,28 +392,28 @@
       }
       
       // Replace the document with the result
-      replaceDoc(resultHtml);
+      replaceDoc(resultHtml, outputMimeType);
     }
 
     // Replace the current document with the provided HTML.
-    function replaceDoc(newHTML) {
+    function replaceDoc(newHTML, mimeType) {
       if (typeof newHTML !== 'string' ) {
         return showError('newHTML should be a string');
       }
       if (document instanceof XMLDocument) {
         const htmlRoot = document.createElementNS("http://www.w3.org/1999/xhtml","html");
         document.documentElement.replaceWith(htmlRoot);
-        unsafeReplaceDocumentWithHtml(htmlRoot, newHTML);
+        unsafeReplaceDocumentWithHtml(htmlRoot, newHTML, mimeType);
       } else if (document instanceof HTMLDocument) {
-        unsafeReplaceDocumentWithHtml(document.documentElement, newHTML);
+        unsafeReplaceDocumentWithHtml(document.documentElement, newHTML, mimeType);
       } else {
         return showError('Unknown document type');
       }
     }
 
-    function unsafeReplaceDocumentWithHtml(targetElement, htmlString) {
+    function unsafeReplaceDocumentWithHtml(targetElement, htmlString, mimeType) {
       // First parse the document and move content to a fragment.
-      const parsedDoc = (new DOMParser()).parseFromString(htmlString, 'text/html');
+      const parsedDoc = (new DOMParser()).parseFromString(htmlString, mimeType || 'text/html');
       const fragment = document.createDocumentFragment();
       fragment.append(...parsedDoc.documentElement.childNodes);
       // Scripts need to be re-created, so they will execute:

@@ -125,6 +125,41 @@ const testCases = [
         </body>`,
 },
 {
+    name: 'XSLTProcessor API (XML output)',
+    html: `
+        <!DOCTYPE html>
+        <body>
+        {{SCRIPT_INJECTION_LOCATION}}
+        <div id="target"></div>
+        <script>
+        window.onload = () => {
+            const xml = \`<page>
+                <first>FAIL</first>
+                <message>PASS</message>
+            </page>\`;
+            const xsl = \`<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+                <xsl:output method="xml"/>
+                <xsl:template match="/">
+                <xsl:apply-templates select="/page/message"/>
+                </xsl:template>
+                <xsl:template match="/page/message">
+                <div xmlns="http://www.w3.org/1999/xhtml" style="color:green"><xsl:value-of select="."/></div>
+                </xsl:template>
+            </xsl:stylesheet>\`;
+
+            const parser = new window.DOMParser();
+            const xmlDoc = parser.parseFromString(xml, "application/xml");
+            const xslDoc = parser.parseFromString(xsl, "application/xml");
+            const xsltProcessor = new window.XSLTProcessor();
+            xsltProcessor.importStylesheet(xslDoc);
+            const fragment = xsltProcessor.transformToFragment(xmlDoc, document);
+            const div = fragment.querySelector('div')
+            document.getElementById("target").appendChild(div);
+        };
+        </script>
+        </body>`,
+},
+{
     name: 'Blank result',
     html: `
         <!DOCTYPE html>
