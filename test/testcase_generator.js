@@ -1,3 +1,20 @@
+const UTILITIES = `
+    function initProcessor(xml,xsl) {
+        const parser = new window.DOMParser();
+        const xmlDoc = parser.parseFromString(xml, "application/xml");
+        const xslDoc = parser.parseFromString(xsl, "application/xml");
+        const xsltProcessor = new window.XSLTProcessor();
+        xsltProcessor.importStylesheet(xslDoc);
+        return {xsltProcessor,xmlDoc};
+    }
+    function toFlatString(node) {
+        const htmlString = Array.from(node.childNodes).map(node => {
+            return node.outerHTML || node.textContent;
+        }).join('')
+        return htmlString.replace(/\\s/g,'');
+    }
+`;
+
 const testCases = [
 {
     name: 'Basic Transformation',
@@ -91,76 +108,6 @@ const testCases = [
         </xsl:stylesheet>`,
 },
 {
-    name: 'XSLTProcessor API',
-    html: `
-        <!DOCTYPE html>
-        <body>
-        {{SCRIPT_INJECTION_LOCATION}}
-        <div id="target"></div>
-        <script>
-        window.onload = () => {
-            const xml = \`<page>
-                <first>FAIL</first>
-                <message>PASS</message>
-            </page>\`;
-            const xsl = \`<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
-                <xsl:output method="html"/>
-                <xsl:template match="/">
-                <xsl:apply-templates select="/page/message"/>
-                </xsl:template>
-                <xsl:template match="/page/message">
-                <div style="color:green"><xsl:value-of select="."/></div>
-                </xsl:template>
-            </xsl:stylesheet>\`;
-
-            const parser = new window.DOMParser();
-            const xmlDoc = parser.parseFromString(xml, "application/xml");
-            const xslDoc = parser.parseFromString(xsl, "application/xml");
-            const xsltProcessor = new window.XSLTProcessor();
-            xsltProcessor.importStylesheet(xslDoc);
-            const fragment = xsltProcessor.transformToFragment(xmlDoc, document);
-            const div = fragment.querySelector('div')
-            document.getElementById("target").appendChild(div);
-        };
-        </script>
-        </body>`,
-},
-{
-    name: 'XSLTProcessor API (XML output)',
-    html: `
-        <!DOCTYPE html>
-        <body>
-        {{SCRIPT_INJECTION_LOCATION}}
-        <div id="target"></div>
-        <script>
-        window.onload = () => {
-            const xml = \`<page>
-                <first>FAIL</first>
-                <message>PASS</message>
-            </page>\`;
-            const xsl = \`<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
-                <xsl:output method="xml"/>
-                <xsl:template match="/">
-                <xsl:apply-templates select="/page/message"/>
-                </xsl:template>
-                <xsl:template match="/page/message">
-                <div xmlns="http://www.w3.org/1999/xhtml" style="color:green"><xsl:value-of select="."/></div>
-                </xsl:template>
-            </xsl:stylesheet>\`;
-
-            const parser = new window.DOMParser();
-            const xmlDoc = parser.parseFromString(xml, "application/xml");
-            const xslDoc = parser.parseFromString(xsl, "application/xml");
-            const xsltProcessor = new window.XSLTProcessor();
-            xsltProcessor.importStylesheet(xslDoc);
-            const fragment = xsltProcessor.transformToFragment(xmlDoc, document);
-            const div = fragment.querySelector('div')
-            document.getElementById("target").appendChild(div);
-        };
-        </script>
-        </body>`,
-},
-{
     name: 'Blank result',
     html: `
         <!DOCTYPE html>
@@ -189,7 +136,7 @@ const testCases = [
         </body>`,
 },
 {
-    name: 'transformToFragment structure',
+    name: 'XSLTProcessor output (HTML)',
     html: `
         <!DOCTYPE html>
         <body>
@@ -198,35 +145,172 @@ const testCases = [
         <script>
         window.onload = () => {
             const xml = \`<?xml version="1.0" encoding="utf-8"?>
-                <page><first>FAIL</first></page>\`;
+                <page>FAIL</page>\`;
             const xsl = \`<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
                 <xsl:output method="html"/>
                 <xsl:template match="/">
                 <html>
-                    <head>
-                        <title>PASS</title>
-                    </head>
-                    <body>
-                        <div>PASS</div>
-                    </body>
+                    <head><title>PASS</title></head>
+                    <body><div>PASS</div></body>
                 </html>
                 </xsl:template>
                 </xsl:stylesheet>\`;
-            const parser = new window.DOMParser();
-            const xmlDoc = parser.parseFromString(xml, "application/xml");
-            const xslDoc = parser.parseFromString(xsl, "application/xml");
-            const xsltProcessor = new window.XSLTProcessor();
-            xsltProcessor.importStylesheet(xslDoc);
-            const fragment = xsltProcessor.transformToFragment(xmlDoc, document);
-            if (fragment.children.length === 3 &&
-                fragment.children[0] instanceof HTMLMetaElement &&
-                fragment.children[1] instanceof HTMLTitleElement &&
-                fragment.children[2] instanceof HTMLDivElement) {
-                document.getElementById("target").textContent = 'PASS';
+            ${UTILITIES}
+            const {xsltProcessor,xmlDoc} = initProcessor(xml,xsl);
+            const fragment = toFlatString(xsltProcessor.transformToFragment(xmlDoc, document));
+            if (fragment !== '<metahttp-equiv="Content-Type"content="text/html;charset=UTF-8"><title>PASS</title><div>PASS</div>') {
+                document.getElementById("target").textContent = 'FAIL';
+                return;
             }
+            const doc = toFlatString(xsltProcessor.transformToDocument(xmlDoc));
+            if (doc !== '<html><head><metahttp-equiv="Content-Type"content="text/html;charset=UTF-8"><title>PASS</title></head><body><div>PASS</div></body></html>') {
+                document.getElementById("target").textContent = 'FAIL';
+                return;
+            }
+            document.getElementById("target").textContent = 'PASS';
         };
-        </script>
-        </body>`,
+        </script>`,
+},
+{
+    name: 'XSLTProcessor output (XML)',
+    html: `
+        <!DOCTYPE html>
+        <body>
+        {{SCRIPT_INJECTION_LOCATION}}
+        <div id="target" style="color:green">FAIL</div>
+        <script>
+        window.onload = () => {
+            const xml = \`<?xml version="1.0" encoding="utf-8"?>
+                <page>FAIL</page>\`;
+            const xsl = \`<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+                <xsl:output method="xml"/>
+                <xsl:template match="/">
+                <html>
+                    <head><title>PASS</title></head>
+                    <body><div>PASS</div></body>
+                </html>
+                </xsl:template>
+                </xsl:stylesheet>\`;
+            ${UTILITIES}
+            const {xsltProcessor,xmlDoc} = initProcessor(xml,xsl);
+            const fragment = toFlatString(xsltProcessor.transformToFragment(xmlDoc, document));
+            if (fragment !== '<html><head><title>PASS</title></head><body><div>PASS</div></body></html>') {
+                document.getElementById("target").textContent = 'FAIL';
+                return;
+            }
+            const doc = toFlatString(xsltProcessor.transformToDocument(xmlDoc));
+            if (doc !== '<html><head><title>PASS</title></head><body><div>PASS</div></body></html>') {
+                document.getElementById("target").textContent = 'FAIL';
+                return;
+            }
+            document.getElementById("target").textContent = 'PASS';
+        };
+        </script>`,
+},
+{
+    name: 'XSLTProcessor output (text)',
+    html: `
+        <!DOCTYPE html>
+        <body>
+        {{SCRIPT_INJECTION_LOCATION}}
+        <div id="target" style="color:green">FAIL</div>
+        <script>
+        window.onload = () => {
+            const xml = \`<?xml version="1.0" encoding="utf-8"?>
+                <page>FAIL</page>\`;
+            const xsl = \`<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+                <xsl:output method="text"/>
+                <xsl:template match="/">
+                <html>
+                    <head><title>PASS</title></head>
+                    <body><div>PASS</div></body>
+                </html>
+                </xsl:template>
+                </xsl:stylesheet>\`;
+            ${UTILITIES}
+            const {xsltProcessor,xmlDoc} = initProcessor(xml,xsl);
+            const fragment = toFlatString(xsltProcessor.transformToFragment(xmlDoc, document));
+            if (fragment !== 'PASSPASS') {
+                document.getElementById("target").textContent = 'FAIL';
+                return;
+            }
+            const doc = toFlatString(xsltProcessor.transformToDocument(xmlDoc));
+            if (doc !== '<htmlxmlns="http://www.w3.org/1999/xhtml"><head><title></title></head><body><pre>PASSPASS</pre></body></html>') {
+                document.getElementById("target").textContent = 'FAIL';
+                return;
+            }
+            document.getElementById("target").textContent = 'PASS';
+        };
+        </script>`,
+},
+{
+    name: 'XSLTProcessor output (blank, html content)',
+    html: `
+        <!DOCTYPE html>
+        <body>
+        {{SCRIPT_INJECTION_LOCATION}}
+        <div id="target" style="color:green">FAIL</div>
+        <script>
+        window.onload = () => {
+            const xml = \`<?xml version="1.0" encoding="utf-8"?>
+                <page>FAIL</page>\`;
+            const xsl = \`<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+                <xsl:template match="/">
+                <html>
+                    <head><title>PASS</title></head>
+                    <body><div>PASS</div></body>
+                </html>
+                </xsl:template>
+                </xsl:stylesheet>\`;
+            ${UTILITIES}
+            const {xsltProcessor,xmlDoc} = initProcessor(xml,xsl);
+            const fragment = toFlatString(xsltProcessor.transformToFragment(xmlDoc, document));
+            if (fragment !== '<metahttp-equiv="Content-Type"content="text/html;charset=UTF-8"><title>PASS</title><div>PASS</div>') {
+                document.getElementById("target").textContent = 'FAIL';
+                return;
+            }
+            const doc = toFlatString(xsltProcessor.transformToDocument(xmlDoc));
+            if (doc !== '<html><head><metahttp-equiv="Content-Type"content="text/html;charset=UTF-8"><title>PASS</title></head><body><div>PASS</div></body></html>') {
+                document.getElementById("target").textContent = 'FAIL';
+                return;
+            }
+            document.getElementById("target").textContent = 'PASS';
+        };
+        </script>`,
+},
+{
+    name: 'XSLTProcessor output (blank, non-html content)',
+    html: `
+        <!DOCTYPE html>
+        <body>
+        {{SCRIPT_INJECTION_LOCATION}}
+        <div id="target" style="color:green">FAIL</div>
+        <script>
+        window.onload = () => {
+            const xml = \`<?xml version="1.0" encoding="utf-8"?>
+                <page>FAIL</page>\`;
+            const xsl = \`<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+                <xsl:template match="/">
+                <root>
+                    <div>PASS</div>
+                </root>
+                </xsl:template>
+                </xsl:stylesheet>\`;
+            ${UTILITIES}
+            const {xsltProcessor,xmlDoc} = initProcessor(xml,xsl);
+            const fragment = toFlatString(xsltProcessor.transformToFragment(xmlDoc, document));
+            if (fragment !== '<root><div>PASS</div></root>') {
+                document.getElementById("target").textContent = 'FAIL';
+                return;
+            }
+            const doc = toFlatString(xsltProcessor.transformToDocument(xmlDoc));
+            if (doc !== '<root><div>PASS</div></root>') {
+                document.getElementById("target").textContent = 'FAIL';
+                return;
+            }
+            document.getElementById("target").textContent = 'PASS';
+        };
+        </script>`,
 },
 {
     name: 'transformToDocument structure',

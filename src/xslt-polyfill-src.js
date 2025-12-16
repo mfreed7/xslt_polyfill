@@ -272,15 +272,6 @@
         this.#stylesheetBaseUrl = stylesheet.baseURI || window.location.href;
       }
 
-      // Returns just the text.
-      transformToText(source) {
-        if (!this.#stylesheetText) {
-            throw new Error("XSLTProcessor: Stylesheet not imported.");
-        }
-        const sourceXml = (new XMLSerializer()).serializeToString(source);
-        return transformXmlWithXslt(sourceXml, this.#stylesheetText, this.#parameters, this.#stylesheetBaseUrl, /*allowAsync*/false, /*buildPlainText*/false).content;
-      }
-
       // Returns a new document (XML or HTML).
       transformToDocument(source) {
         if (!this.#stylesheetText) {
