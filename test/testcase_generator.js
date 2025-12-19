@@ -409,6 +409,57 @@ const testCases = [
         };
         </script>
         </body>`,
+},
+{
+    name: 'Script Arrow Function',
+    xml: `<?xml version="1.0" encoding="UTF-8"?>
+        <?xml-stylesheet type="text/xsl" href="{{XSL_HREF}}"?>
+        <document>
+            {{SCRIPT_INJECTION_LOCATION}}
+            FAIL!!!
+        </document>`,
+    xsl: `<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+        <xsl:output method="html"/>
+        <xsl:template match="/">
+            <body>
+                <script>
+                    // Make sure special characters like ">" are handled:
+                    const f = kill => "foo";
+                    if (f(1) === 'foo') {
+                        const div = document.createElement('div');
+                        div.style.color = 'green';
+                        div.textContent = 'PASS';
+                        document.body.appendChild(div);
+                    }
+                </script>
+            </body>
+        </xsl:template>
+        </xsl:stylesheet>`,
+},
+{
+    name: 'Script RegExp Entity',
+    xml: `<?xml version="1.0" encoding="UTF-8"?>
+        <?xml-stylesheet type="text/xsl" href="{{XSL_HREF}}"?>
+        <document>
+            {{SCRIPT_INJECTION_LOCATION}}
+            FAIL!!!
+        </document>`,
+    xsl: `<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+        <xsl:output method="html"/>
+        <xsl:template match="/">
+            <body>
+                <script>
+                    // Make sure escaped entities like &amp; are are handled:
+                    var showHideAllRegex = new RegExp("[\\?&amp;]");
+                    // If no exception above, pass.
+                    const div = document.createElement('div');
+                    div.style.color = 'green';
+                    div.textContent = 'PASS';
+                    document.body.appendChild(div);
+                </script>
+            </body>
+        </xsl:template>
+        </xsl:stylesheet>`,
 }
 ];
 
