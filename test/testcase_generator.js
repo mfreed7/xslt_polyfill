@@ -136,6 +136,35 @@ const testCases = [
         </body>`,
 },
 {
+    name: 'Multiple root nodes',
+    html: `
+        <!DOCTYPE html>
+        <body>
+        {{SCRIPT_INJECTION_LOCATION}}
+        <div id="target" style="color:green">FAIL!!!</div>
+        <script>
+        window.onload = () => {
+            const xml = \`<?xml version="1.0" encoding="utf-8"?>
+                <page>FAIL!!!</page>\`;
+            const xsl = \`<xsl:stylesheet xmlns:xsl="http://www.w3.org/1999/XSL/Transform" version="1.0">
+                <xsl:output method="xml"/>
+                <xsl:template match="/">
+                <div>node1</div>
+                <div>node2</div>
+                </xsl:template>
+                </xsl:stylesheet>\`;
+            ${UTILITIES}
+            const {xsltProcessor,xmlDoc} = initProcessor(xml,xsl);
+            const fragment = toFlatString(xsltProcessor.transformToFragment(xmlDoc, document));
+            if (fragment !== '<div>node1</div><div>node2</div>') {
+                document.getElementById("target").textContent = 'FAIL!!!';
+                return;
+            }
+            document.getElementById("target").textContent = 'PASS';
+        };
+        </script>`,
+},
+{
     name: 'XSLTProcessor output (HTML)',
     html: `
         <!DOCTYPE html>

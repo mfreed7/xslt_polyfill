@@ -291,27 +291,40 @@
         const sourceXml = (new XMLSerializer()).serializeToString(source);
         const {content, mimeType} = transformXmlWithXslt(sourceXml, this.#stylesheetText, this.#parameters, this.#stylesheetBaseUrl, /*allowAsync*/false, /*buildPlainText*/false);
         const fragment = document.createDocumentFragment();
-        if (mimeType === 'text/plain') {
-          fragment.append(content);
-          return fragment;
+        switch (mimeType) {
+          case 'text/plain':
+            fragment.append(content);
+            return fragment;
+          case 'application/xml': {
+            // It's legal for XML content to contain multiple sibling root
+            // elements in transformToFragment, so wrap the content in one.
+            const fakeRoot = `rootelementforparsing`;
+            const doc = (new DOMParser()).parseFromString(`<${fakeRoot}>${content}</${fakeRoot}>`, mimeType);
+            fragment.append(...doc.querySelector(fakeRoot).childNodes);
+            return fragment;
+          }
+          case 'text/html': {
+            // The transformToFragment method flattens head/body into a flat list.
+            // Note this comment: https://source.chromium.org/chromium/chromium/src/+/main:third_party/blink/renderer/core/editing/serializers/serialization.cc;l=776;drc=7666bc1983c2a5b98e5dc6fa6c28f8f53c07d06f
+            const doc = (new DOMParser()).parseFromString(content, mimeType);
+            const html = doc.firstElementChild instanceof HTMLHtmlElement ? doc.firstElementChild : undefined;
+            const head = html?.firstElementChild;
+            const body = head?.nextElementSibling;
+            if (head) {
+              fragment.append(...head.childNodes);
+              head.remove();
+            }
+            if (body) {
+              fragment.append(...body.childNodes);
+              body.remove();
+            }
+            html?.remove();
+            fragment.append(...doc.childNodes);
+            return fragment;
+          }
+          default:
+            throw new Error(`Unknown mime type ${mimeType}`);
         }
-        const doc = (new DOMParser()).parseFromString(content, mimeType);
-        // The transformToFragment method flattens head/body into a flat list.
-        // Note this comment: https://source.chromium.org/chromium/chromium/src/+/main:third_party/blink/renderer/core/editing/serializers/serialization.cc;l=776;drc=7666bc1983c2a5b98e5dc6fa6c28f8f53c07d06f
-        const html = doc.firstElementChild instanceof HTMLHtmlElement ? doc.firstElementChild : undefined;
-        const head = html?.firstElementChild;
-        const body = head?.nextElementSibling;
-        if (head) {
-          fragment.append(...head.childNodes);
-          head.remove();
-        }
-        if (body) {
-          fragment.append(...body.childNodes);
-          body.remove();
-        }
-        html?.remove();
-        fragment.append(...doc.childNodes);
-        return fragment;
       }
 
       setParameter(namespaceURI, localName, value) {
