@@ -536,10 +536,10 @@ if (!fs.existsSync(outputDir)) {
 
 const scriptInjections = {
   native: '',
-  source: `<script>window.xsltUsePolyfillAlways = true;</script>
+    source: `<script xmlns="http://www.w3.org/1999/xhtml">window.xsltUsePolyfillAlways = true;</script>
     <script src="../../dist/xslt-wasm.js" xmlns="http://www.w3.org/1999/xhtml" charset="utf-8"></script>
     <script src="../../src/xslt-polyfill-src.js" xmlns="http://www.w3.org/1999/xhtml"></script>`,
-  minified: `<script>window.xsltUsePolyfillAlways = true;</script>
+    minified: `<script xmlns="http://www.w3.org/1999/xhtml">window.xsltUsePolyfillAlways = true;</script>
     <script src="../../xslt-polyfill.min.js" xmlns="http://www.w3.org/1999/xhtml" charset="utf-8"></script>`,
 };
 
