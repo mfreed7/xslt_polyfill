@@ -256,6 +256,9 @@
       }
     }
 
+    function isEmptySourceDocument(source) {
+      return source && source.nodeType === Node.DOCUMENT_NODE && !source.documentElement;
+    }
 
     class XSLTProcessor {
       #stylesheetText = null;
@@ -277,6 +280,9 @@
         if (!this.#stylesheetText) {
             throw new Error("XSLTProcessor: Stylesheet not imported.");
         }
+        if (isEmptySourceDocument(source)) {
+          return null;
+        }
         const sourceXml = (new XMLSerializer()).serializeToString(source);
         const {content, mimeType} = transformXmlWithXslt(sourceXml, this.#stylesheetText, this.#parameters, this.#stylesheetBaseUrl, /*allowAsync*/false, /*buildPlainText*/true);
         return (new DOMParser()).parseFromString(content, mimeType);
@@ -287,6 +293,9 @@
       transformToFragment(source, document) {
         if (!this.#stylesheetText) {
             throw new Error("XSLTProcessor: Stylesheet not imported.");
+        }
+        if (isEmptySourceDocument(source)) {
+          return null;
         }
         const sourceXml = (new XMLSerializer()).serializeToString(source);
         const {content, mimeType} = transformXmlWithXslt(sourceXml, this.#stylesheetText, this.#parameters, this.#stylesheetBaseUrl, /*allowAsync*/false, /*buildPlainText*/false);

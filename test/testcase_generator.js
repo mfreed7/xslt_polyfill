@@ -136,6 +136,39 @@ const testCases = [
         </body>`,
 },
 {
+    name: 'Empty XML document source',
+    html: `
+        <!DOCTYPE html>
+        <body>
+        {{SCRIPT_INJECTION_LOCATION}}
+        <div id="target" style="color:green">FAIL!!!</div>
+        <script>
+        window.onload = () => {
+            const xmlDoc = document.implementation.createDocument(null, null, null);
+            const xsl = \`<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+                <xsl:output method="xml"/>
+                <xsl:template match="/">
+                    <root>PASS</root>
+                </xsl:template>
+                </xsl:stylesheet>\`;
+            const parser = new window.DOMParser();
+            const xslDoc = parser.parseFromString(xsl, "application/xml");
+            const xsltProcessor = new window.XSLTProcessor();
+            xsltProcessor.importStylesheet(xslDoc);
+            let docResult;
+            let fragResult;
+           
+            docResult = xsltProcessor.transformToDocument(xmlDoc);
+            fragResult = xsltProcessor.transformToFragment(xmlDoc, document);
+           
+            if (docResult === null && fragResult === null) {
+                document.getElementById("target").textContent = 'PASS';
+            }
+        };
+        </script>
+        </body>`,
+},
+{
     name: 'Multiple root nodes',
     html: `
         <!DOCTYPE html>
@@ -503,9 +536,11 @@ if (!fs.existsSync(outputDir)) {
 
 const scriptInjections = {
   native: '',
-  source: `<script src="../../dist/xslt-wasm.js" xmlns="http://www.w3.org/1999/xhtml" charset="utf-8"></script>
+    source: `<script xmlns="http://www.w3.org/1999/xhtml">window.xsltUsePolyfillAlways = true;</script>
+    <script src="../../dist/xslt-wasm.js" xmlns="http://www.w3.org/1999/xhtml" charset="utf-8"></script>
     <script src="../../src/xslt-polyfill-src.js" xmlns="http://www.w3.org/1999/xhtml"></script>`,
-  minified: '<script src="../../xslt-polyfill.min.js" xmlns="http://www.w3.org/1999/xhtml" charset="utf-8"></script>',
+    minified: `<script xmlns="http://www.w3.org/1999/xhtml">window.xsltUsePolyfillAlways = true;</script>
+    <script src="../../xslt-polyfill.min.js" xmlns="http://www.w3.org/1999/xhtml" charset="utf-8"></script>`,
 };
 
 const generatedTestCases = {};
