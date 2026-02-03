@@ -81,6 +81,11 @@
         if (!importedDoc || !importedDoc.documentElement) {
             continue;
         }
+        const attrs = importedDoc.documentElement.getAttributeNames();
+        for(const attr of attrs) {
+          if(!xsltsheet.documentElement.getAttribute(attr))
+            xsltsheet.documentElement.setAttribute(attr,importedDoc.documentElement.getAttribute(attr));
+        }
         while (importedDoc.documentElement.firstChild) {
           const nodeToImport = importedDoc.documentElement.firstChild;
           if (isDuplicateParam(nodeToImport, xsltsheet, xslns)) {
@@ -387,7 +392,7 @@
     function absoluteUrl(url) {
       return new URL(url, window.location.href).href;
     }
-  
+
     async function loadXmlWithXsltFromBytes(xmlBytes, xmlUrl) {
       xmlUrl = absoluteUrl(xmlUrl);
       // Look inside XML file for a processing instruction with an XSLT file.
@@ -406,13 +411,13 @@
           xsltPath = hrefMatch.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, '\'').replace(/&amp;/g, '&');
         }
       }
-  
+
       if (!xsltPath) {
         // Do not display an error, just leave the original content.
         console.warn(`XSLT Polyfill: No XSLT processing instruction found in ${xmlUrl}`);
         return;
       }
-  
+
       // Fetch the XSLT file, resolving its path relative to the XML file's URL.
       const xsltUrl = new URL(xsltPath, xmlUrl);
       const xsltDoc = await loadDoc(xsltUrl.href, 'default');
