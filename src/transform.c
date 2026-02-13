@@ -5,16 +5,19 @@
 #include <emscripten.h>
 
 // Libxml2 and Libxslt headers
+#include <libexslt/exslt.h>
 #include <libxml/parser.h>
 #include <libxml/tree.h>
 #include <libxml/xmlstring.h>
-#include <libxslt/xslt.h>
+#include <libxml/xpath.h>
+#include <libxml/xpathInternals.h>
 #include <libxslt/documents.h>
-#include <libxslt/xsltutils.h>
-#include <libxslt/transform.h>
-#include <libxslt/security.h>
-#include <libexslt/exslt.h>
 #include <libxslt/imports.h>
+#include <libxslt/security.h>
+#include <libxslt/transform.h>
+#include <libxslt/xslt.h>
+#include <libxslt/xsltInternals.h>
+#include <libxslt/xsltutils.h>
 
 // Forward declaration for our JS fetch function.
 const char* fetch_and_load_document(const char* url);
@@ -52,6 +55,248 @@ EM_JS(const char*, fetch_and_load_document, (const char* url), {
     });
   });
 });
+
+EM_JS(int, js_collate,
+      (const char *s1, const char *s2, const char *lang, int lowerFirst), {
+        const str1 = UTF8ToString(s1);
+        const str2 = UTF8ToString(s2);
+        const l = lang ? UTF8ToString(lang) : undefined;
+
+        const options = {usage : 'sort', sensitivity : 'variant'};
+        if (lowerFirst == = 1)
+          options.caseFirst = 'lower';
+        else if (lowerFirst == = 0)
+          options.caseFirst = 'upper';
+
+        if (!globalThis._xslt_collators)
+          globalThis._xslt_collators = {};
+        const key = (l || 'default') + '|' + lowerFirst;
+        if (!globalThis._xslt_collators[key]) {
+          try {
+            globalThis._xslt_collators[key] =
+                new Intl.Collator(l || undefined, options);
+          } catch (e) {
+            globalThis._xslt_collators[key] =
+                new Intl.Collator(undefined, options);
+          }
+        }
+        return globalThis._xslt_collators[key].compare(str1, str2);
+      });
+
+extern xmlXPathObjectPtr *
+xsltComputeSortResultInternal(xsltTransformContextPtr ctxt, xmlNodePtr sort,
+                              int number, void *locale);
+
+// Custom sort function that uses JS Intl.Collator for string comparison.
+// This matches Chrome's behavior for accented characters and case sensitivity.
+// https://source.chromium.org/chromium/chromium/src/+/main:third_party/blink/renderer/core/xml/xslt_unicode_sort.cc;l=71;drc=97c0a7967c365a7092885334a52c68d1c43efb91
+static void xslt_polyfill_sort_function(xsltTransformContextPtr ctxt,
+                                        xmlNodePtr *sorts, int nbsorts) {
+  const xsltStylePreComp *comp;
+  xmlXPathObjectPtr *resultsTab[XSLT_MAX_SORT];
+  xmlXPathObjectPtr *results = NULL, *res;
+  xmlNodeSetPtr list = NULL;
+  int len = 0;
+  int i, j, incr;
+  int tst;
+  int depth;
+  xmlNodePtr node;
+  xmlXPathObjectPtr tmp;
+  int number[XSLT_MAX_SORT], desc[XSLT_MAX_SORT];
+  const char *lang[XSLT_MAX_SORT];
+  int lower_first[XSLT_MAX_SORT];
+
+  if ((ctxt == NULL) || (sorts == NULL) || (nbsorts <= 0) ||
+      (nbsorts >= XSLT_MAX_SORT)) {
+    return;
+  }
+  if (sorts[0] == NULL) {
+    return;
+  }
+  comp = sorts[0]->psvi;
+  if (comp == NULL) {
+    return;
+  }
+  list = ctxt->nodeList;
+  if ((list == NULL) || (list->nodeNr <= 1)) {
+    return;
+  }
+  for (j = 0; j < nbsorts; j++) {
+    xmlChar *evaluated_lang;
+    comp = sorts[j]->psvi;
+    if ((comp->stype == NULL) && (comp->has_stype != 0)) {
+      xmlChar *stype =
+          xsltEvalAttrValueTemplate(ctxt, sorts[j], BAD_CAST "data-type", NULL);
+      number[j] = 0;
+      if (stype != NULL) {
+        if (xmlStrEqual(stype, (const xmlChar *)"text"))
+          ;
+        else if (xmlStrEqual(stype, (const xmlChar *)"number"))
+          number[j] = 1;
+        xmlFree(stype);
+      }
+    } else {
+      number[j] = comp->number;
+    }
+    if ((comp->order == NULL) && (comp->has_order != 0)) {
+      xmlChar *order =
+          xsltEvalAttrValueTemplate(ctxt, sorts[j], BAD_CAST "order", NULL);
+      desc[j] = 0;
+      if (order != NULL) {
+        if (xmlStrEqual(order, (const xmlChar *)"descending"))
+          desc[j] = 1;
+        xmlFree(order);
+      }
+    } else {
+      desc[j] = comp->descending;
+    }
+    if ((comp->lang == NULL) && (comp->has_lang != 0)) {
+      evaluated_lang =
+          xsltEvalAttrValueTemplate(ctxt, sorts[j], (xmlChar *)"lang", NULL);
+    } else {
+      evaluated_lang = (xmlChar *)comp->lang;
+    }
+    if (evaluated_lang != NULL) {
+      lang[j] = (const char *)evaluated_lang;
+    } else {
+      lang[j] = NULL;
+    }
+    lower_first[j] = comp->lower_first;
+  }
+
+  len = list->nodeNr;
+
+  resultsTab[0] =
+      xsltComputeSortResultInternal(ctxt, sorts[0], number[0], NULL);
+  for (i = 1; i < XSLT_MAX_SORT; i++)
+    resultsTab[i] = NULL;
+
+  results = resultsTab[0];
+  if (results == NULL)
+    goto cleanup;
+
+  for (incr = len / 2; incr > 0; incr /= 2) {
+    for (i = incr; i < len; i++) {
+      j = i - incr;
+      if (results[i] == NULL)
+        continue;
+
+      while (j >= 0) {
+        if (results[j] == NULL)
+          tst = 1;
+        else {
+          if (number[0]) {
+            if (xmlXPathIsNaN(results[j]->floatval)) {
+              if (xmlXPathIsNaN(results[j + incr]->floatval))
+                tst = 0;
+              else
+                tst = -1;
+            } else if (xmlXPathIsNaN(results[j + incr]->floatval))
+              tst = 1;
+            else if (results[j]->floatval == results[j + incr]->floatval)
+              tst = 0;
+            else if (results[j]->floatval > results[j + incr]->floatval)
+              tst = 1;
+            else
+              tst = -1;
+          } else {
+            tst = js_collate((const char *)results[j]->stringval,
+                             (const char *)results[j + incr]->stringval,
+                             lang[0], lower_first[0]);
+          }
+          if (desc[0])
+            tst = -tst;
+        }
+        if (tst == 0) {
+          depth = 1;
+          while (depth < nbsorts) {
+            if (sorts[depth] == NULL)
+              break;
+            comp = sorts[depth]->psvi;
+            if (comp == NULL)
+              break;
+
+            if (resultsTab[depth] == NULL)
+              resultsTab[depth] = xsltComputeSortResultInternal(
+                  ctxt, sorts[depth], number[depth], NULL);
+            res = resultsTab[depth];
+            if (res == NULL)
+              break;
+            if (res[j] == NULL) {
+              if (res[j + incr] != NULL)
+                tst = 1;
+            } else if (res[j + incr] == NULL) {
+              tst = -1;
+            } else {
+              if (number[depth]) {
+                if (xmlXPathIsNaN(res[j]->floatval)) {
+                  if (xmlXPathIsNaN(res[j + incr]->floatval))
+                    tst = 0;
+                  else
+                    tst = -1;
+                } else if (xmlXPathIsNaN(res[j + incr]->floatval))
+                  tst = 1;
+                else if (res[j]->floatval == res[j + incr]->floatval)
+                  tst = 0;
+                else if (res[j]->floatval > res[j + incr]->floatval)
+                  tst = 1;
+                else
+                  tst = -1;
+              } else {
+                tst = js_collate((const char *)res[j]->stringval,
+                                 (const char *)res[j + incr]->stringval,
+                                 lang[depth], lower_first[depth]);
+              }
+              if (desc[depth])
+                tst = -tst;
+            }
+            if (tst != 0)
+              break;
+            depth++;
+          }
+        }
+        if (tst == 0) {
+          tst = results[j]->index > results[j + incr]->index;
+        }
+        if (tst > 0) {
+          tmp = results[j];
+          results[j] = results[j + incr];
+          results[j + incr] = tmp;
+          node = list->nodeTab[j];
+          list->nodeTab[j] = list->nodeTab[j + incr];
+          list->nodeTab[j + incr] = node;
+          depth = 1;
+          while (depth < nbsorts) {
+            if (sorts[depth] == NULL)
+              break;
+            if (resultsTab[depth] == NULL)
+              break;
+            res = resultsTab[depth];
+            tmp = res[j];
+            res[j] = res[j + incr];
+            res[j + incr] = tmp;
+            depth++;
+          }
+          j -= incr;
+        } else
+          break;
+      }
+    }
+  }
+
+cleanup:
+  for (j = 0; j < nbsorts; j++) {
+    comp = sorts[j]->psvi;
+    if (lang[j] != NULL && (xmlChar *)lang[j] != comp->lang) {
+      xmlFree((xmlChar *)lang[j]);
+    }
+    if (resultsTab[j] != NULL) {
+      for (i = 0; i < len; i++)
+        xmlXPathFreeObject(resultsTab[j][i]);
+      xmlFree(resultsTab[j]);
+    }
+  }
+}
 
 /**
  * @brief A callback function for libxslt to load external documents.
@@ -255,6 +500,9 @@ char* transform(const char* xml_content, int xml_len, const char* xslt_content, 
         printf("XSLT Transformation Error: Failed to create XSLT transformation context.\n");
         goto cleanup;
     }
+
+    // Use our custom sort function that matches Chrome's behavior.
+    xsltSetCtxtSortFunc(ctxt, xslt_polyfill_sort_function);
 
     // 4. Set up security preferences to disable file and network access.
     sec_prefs = xsltNewSecurityPrefs();

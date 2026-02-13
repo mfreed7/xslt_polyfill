@@ -550,6 +550,63 @@ const testCases = [
         };
         </script>
         </body>`,
+},
+{
+    name: 'Sorting Accents and Case',
+    html: `
+        <!DOCTYPE html>
+        <body>
+        {{SCRIPT_INJECTION_LOCATION}}
+        <div id="target" style="color:green">FAIL!!!</div>
+        <script>
+        window.onload = () => {
+            const xml = \`<?xml version="1.0" encoding="utf-8"?>
+                <root xmlns:e="testCase">
+                    <e:List>
+                        <e:Item><e:NA>Z</e:NA></e:Item>
+                        <e:Item><e:NA>A</e:NA></e:Item>
+                        <e:Item><e:NA>z</e:NA></e:Item>
+                        <e:Item><e:NA>a</e:NA></e:Item>
+                        <e:Item><e:NA>Š</e:NA></e:Item>
+                        <e:Item><e:NA>S</e:NA></e:Item>
+                    </e:List>
+                </root>\`;
+            const xsl = \`<?xml version="1.0" encoding="utf-8"?>
+                <xsl:stylesheet xmlns:e="testCase" xmlns:xsl="http://www.w3.org/1999/XSL/Transform" version="1.0" exclude-result-prefixes="xsl e">
+                    <xsl:output method="text"/>
+                    <xsl:template match="/">
+                        <xsl:for-each select="e:root/e:List/e:Item">
+                            <xsl:sort select="e:NA"/>
+                            <xsl:value-of select="e:NA"/>
+                        </xsl:for-each>
+                    </xsl:template>
+                </xsl:stylesheet>\`;
+            ${UTILITIES}
+            const {xsltProcessor,xmlDoc} = initProcessor(xml,xsl);
+            const fragment = xsltProcessor.transformToFragment(xmlDoc, document);
+            const result = fragment.textContent.trim();
+            
+            // Expected for native: "AaSSŠZz" (or similar where A is near a, S near Š).
+            // Polyfill currently likely does byte order: "AZazŠ"
+            
+            const posA = result.indexOf('A');
+            const posa = result.indexOf('a');
+            const posS = result.indexOf('S');
+            const posŠ = result.indexOf('Š');
+            const posZ = result.indexOf('Z');
+            const posz = result.indexOf('z');
+
+            const isCaseInsensitiveish = Math.abs(posA - posa) === 1 && Math.abs(posZ - posz) === 1;
+            const isAccentsNearBase = Math.abs(posS - posŠ) === 1;
+            
+            if (isCaseInsensitiveish && isAccentsNearBase) {
+                document.getElementById("target").textContent = 'PASS';
+            } else {
+                document.getElementById("target").textContent = 'FAIL: "' + result + '" (A:'+posA+', a:'+posa+', S:'+posS+', Š:'+posŠ+', Z:'+posZ+', z:'+posz+')';
+            }
+        };
+        </script>
+        </body>`,
 }
 ];
 
