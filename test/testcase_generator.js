@@ -522,6 +522,34 @@ const testCases = [
             </body>
         </xsl:template>
         </xsl:stylesheet>`,
+},
+{
+    name: 'Namespace URI in Fragment',
+    html: `
+        <!DOCTYPE html>
+        <body>
+        {{SCRIPT_INJECTION_LOCATION}}
+        <div id="target" style="color:green">FAIL!!!</div>
+        <script>
+        window.onload = () => {
+          const xml = \`<?xml version="1.0" encoding="utf-8"?>
+              <page>FAIL!!!</page>\`;
+          const xsl = \`<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+              <xsl:template match="/">
+              <root>
+                  <div>Should be XHTML</div>
+              </root>
+              </xsl:template>
+              </xsl:stylesheet>\`;
+          ${UTILITIES}
+          const {xsltProcessor,xmlDoc} = initProcessor(xml,xsl);
+          const fragment = xsltProcessor.transformToFragment(xmlDoc, document);
+          const firstDiv = fragment.querySelector('div');
+          divIsXHTMLNamespace = firstDiv && firstDiv.namespaceURI === 'http://www.w3.org/1999/xhtml';
+          document.getElementById("target").textContent = divIsXHTMLNamespace ? 'PASS' : 'FAIL';
+        };
+        </script>
+        </body>`,
 }
 ];
 

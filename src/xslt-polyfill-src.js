@@ -308,7 +308,8 @@
             // It's legal for XML content to contain multiple sibling root
             // elements in transformToFragment, so wrap the content in one.
             const fakeRoot = `rootelementforparsing`;
-            const doc = (new DOMParser()).parseFromString(`<${fakeRoot}>${content}</${fakeRoot}>`, mimeType);
+            const ns = (document instanceof HTMLDocument) ? ` xmlns="http://www.w3.org/1999/xhtml"` : '';
+            const doc = (new DOMParser()).parseFromString(`<${fakeRoot}${ns}>${content}</${fakeRoot}>`, mimeType);
             fragment.append(...doc.querySelector(fakeRoot).childNodes);
             return fragment;
           }
@@ -459,9 +460,19 @@
         mimeType = 'text/html';
       }
       // First parse the document and move content to a fragment.
-      const parsedDoc = (new DOMParser()).parseFromString(htmlString, mimeType || 'text/html');
+      let root,parsedDoc;
+      if (mimeType === 'application/xml' && document instanceof HTMLDocument) {
+        const fakeRoot = `rootelementforparsing`;
+        parsedDoc = (new DOMParser()).parseFromString(`<${fakeRoot} xmlns="http://www.w3.org/1999/xhtml">${htmlString}</${fakeRoot}>`, mimeType);
+        root = parsedDoc.querySelector(fakeRoot);
+      } else {
+        parsedDoc = (new DOMParser()).parseFromString(htmlString, mimeType || 'text/html');
+        root = parsedDoc.documentElement;
+      }
       const fragment = document.createDocumentFragment();
-      fragment.append(...parsedDoc.documentElement.childNodes);
+      if (root) {
+        fragment.append(...root.childNodes);
+      }
       // Scripts need to be re-created, so they will execute:
       const scripts = fragment.querySelectorAll('script');
       const textArea = document.createElementNS('http://www.w3.org/1999/xhtml','textarea');
