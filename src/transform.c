@@ -78,6 +78,41 @@ EM_JS(int, js_collate,
         }
       });
 
+static int xslt_polyfill_compare_objects(xmlXPathObjectPtr res1,
+                                         xmlXPathObjectPtr res2, int number,
+                                         int desc, const char *lang,
+                                         int lower_first) {
+  int tst = 0;
+  if (res1 == NULL) {
+    if (res2 != NULL)
+      tst = 1;
+  } else if (res2 == NULL) {
+    tst = -1;
+  } else {
+    if (number) {
+      if (xmlXPathIsNaN(res1->floatval)) {
+        if (xmlXPathIsNaN(res2->floatval))
+          tst = 0;
+        else
+          tst = -1;
+      } else if (xmlXPathIsNaN(res2->floatval))
+        tst = 1;
+      else if (res1->floatval == res2->floatval)
+        tst = 0;
+      else if (res1->floatval > res2->floatval)
+        tst = 1;
+      else
+        tst = -1;
+    } else {
+      tst = js_collate((const char *)res1->stringval,
+                       (const char *)res2->stringval, lang, lower_first);
+    }
+    if (desc)
+      tst = -tst;
+  }
+  return tst;
+}
+
 static xmlXPathObjectPtr *
 xslt_polyfill_compute_sort_result(xsltTransformContextPtr ctxt, xmlNodePtr sort,
                                   int number) {
@@ -248,34 +283,11 @@ static void xslt_polyfill_sort_function(xsltTransformContextPtr ctxt,
         continue;
 
       while (j >= 0) {
-        if (results[j] == NULL)
-          tst = 1;
-        else {
-          if (number[0]) {
-            if (xmlXPathIsNaN(results[j]->floatval)) {
-              if (xmlXPathIsNaN(results[j + incr]->floatval))
-                tst = 0;
-              else
-                tst = -1;
-            } else if (xmlXPathIsNaN(results[j + incr]->floatval))
-              tst = 1;
-            else if (results[j]->floatval == results[j + incr]->floatval)
-              tst = 0;
-            else if (results[j]->floatval > results[j + incr]->floatval)
-              tst = 1;
-            else
-              tst = -1;
-          } else {
-            tst = js_collate((const char *)results[j]->stringval,
-                             (const char *)results[j + incr]->stringval,
-                             lang[0], lower_first[0]);
-          }
-          if (desc[0])
-            tst = -tst;
-        }
+        tst = xslt_polyfill_compare_objects(results[j], results[j + incr],
+                                            number[0], desc[0], lang[0],
+                                            lower_first[0]);
         if (tst == 0) {
-          depth = 1;
-          while (depth < nbsorts) {
+          for (depth = 1; depth < nbsorts; depth++) {
             if (sorts[depth] == NULL)
               break;
             comp = (const xsltStylePreComp *)sorts[depth]->psvi;
@@ -288,37 +300,11 @@ static void xslt_polyfill_sort_function(xsltTransformContextPtr ctxt,
             res = resultsTab[depth];
             if (res == NULL)
               break;
-            if (res[j] == NULL) {
-              if (res[j + incr] != NULL)
-                tst = 1;
-            } else if (res[j + incr] == NULL) {
-              tst = -1;
-            } else {
-              if (number[depth]) {
-                if (xmlXPathIsNaN(res[j]->floatval)) {
-                  if (xmlXPathIsNaN(res[j + incr]->floatval))
-                    tst = 0;
-                  else
-                    tst = -1;
-                } else if (xmlXPathIsNaN(res[j + incr]->floatval))
-                  tst = 1;
-                else if (res[j]->floatval == res[j + incr]->floatval)
-                  tst = 0;
-                else if (res[j]->floatval > res[j + incr]->floatval)
-                  tst = 1;
-                else
-                  tst = -1;
-              } else {
-                tst = js_collate((const char *)res[j]->stringval,
-                                 (const char *)res[j + incr]->stringval,
-                                 lang[depth], lower_first[depth]);
-              }
-              if (desc[depth])
-                tst = -tst;
-            }
+            tst = xslt_polyfill_compare_objects(
+                res[j], res[j + incr], number[depth], desc[depth], lang[depth],
+                lower_first[depth]);
             if (tst != 0)
               break;
-            depth++;
           }
         }
         if (tst == 0) {
@@ -331,17 +317,13 @@ static void xslt_polyfill_sort_function(xsltTransformContextPtr ctxt,
           node = list->nodeTab[j];
           list->nodeTab[j] = list->nodeTab[j + incr];
           list->nodeTab[j + incr] = node;
-          depth = 1;
-          while (depth < nbsorts) {
-            if (sorts[depth] == NULL)
-              break;
+          for (depth = 1; depth < nbsorts; depth++) {
             if (resultsTab[depth] == NULL)
               break;
             res = resultsTab[depth];
             tmp = res[j];
             res[j] = res[j + incr];
             res[j + incr] = tmp;
-            depth++;
           }
           j -= incr;
         } else
