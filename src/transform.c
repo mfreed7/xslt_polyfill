@@ -14,6 +14,7 @@
 #include <libxslt/documents.h>
 #include <libxslt/imports.h>
 #include <libxslt/security.h>
+#include <libxslt/templates.h>
 #include <libxslt/transform.h>
 #include <libxslt/xslt.h>
 #include <libxslt/xsltInternals.h>
@@ -58,34 +59,100 @@ EM_JS(const char*, fetch_and_load_document, (const char* url), {
 
 EM_JS(int, js_collate,
       (const char *s1, const char *s2, const char *lang, int lowerFirst), {
-        const str1 = UTF8ToString(s1);
-        const str2 = UTF8ToString(s2);
-        const l = lang ? UTF8ToString(lang) : undefined;
+        try {
+          const str1 = UTF8ToString(s1);
+          const str2 = UTF8ToString(s2);
+          const l =
+              (lang && lang !== "") ? UTF8ToString(lang) : undefined;
 
-        const options = {usage : 'sort', sensitivity : 'variant'};
-        if (lowerFirst == = 1)
-          options.caseFirst = 'lower';
-        else if (lowerFirst == = 0)
-          options.caseFirst = 'upper';
+          const options = {usage : 'sort', sensitivity : 'variant'};
+          if (lowerFirst === 1)
+            options.caseFirst = 'lower';
+          else if (lowerFirst === 0)
+            options.caseFirst = 'upper';
 
-        if (!globalThis._xslt_collators)
-          globalThis._xslt_collators = {};
-        const key = (l || 'default') + '|' + lowerFirst;
-        if (!globalThis._xslt_collators[key]) {
-          try {
-            globalThis._xslt_collators[key] =
-                new Intl.Collator(l || undefined, options);
-          } catch (e) {
-            globalThis._xslt_collators[key] =
-                new Intl.Collator(undefined, options);
-          }
+          return str1.localeCompare(str2, l, options);
+        } catch (e) {
+          console.error('js_collate error:', e);
+          return 0;
         }
-        return globalThis._xslt_collators[key].compare(str1, str2);
       });
 
-extern xmlXPathObjectPtr *
-xsltComputeSortResultInternal(xsltTransformContextPtr ctxt, xmlNodePtr sort,
-                              int number, void *locale);
+static xmlXPathObjectPtr *
+xslt_polyfill_compute_sort_result(xsltTransformContextPtr ctxt, xmlNodePtr sort,
+                                  int number) {
+  const xsltStylePreComp *comp;
+  xmlXPathObjectPtr *results = NULL;
+  xmlNodeSetPtr list = NULL;
+  xmlXPathObjectPtr res;
+  int len = 0;
+  int i;
+  xmlNodePtr oldNode;
+  xmlNodePtr oldInst;
+  int oldPos, oldSize;
+  int oldNsNr;
+  xmlNsPtr *oldNamespaces;
+
+  comp = (const xsltStylePreComp *)sort->psvi;
+  if (comp == NULL) {
+    return (NULL);
+  }
+
+  if ((comp->select == NULL) || (comp->comp == NULL))
+    return (NULL);
+
+  list = ctxt->nodeList;
+  if ((list == NULL) || (list->nodeNr <= 1))
+    return (NULL);
+
+  len = list->nodeNr;
+
+  results = (xmlXPathObjectPtr *)xmlMalloc(len * sizeof(xmlXPathObjectPtr));
+  if (results == NULL) {
+    return (NULL);
+  }
+
+  oldInst = ctxt->inst;
+  oldNode = ctxt->xpathCtxt->node;
+  oldPos = ctxt->xpathCtxt->proximityPosition;
+  oldSize = ctxt->xpathCtxt->contextSize;
+  oldNsNr = ctxt->xpathCtxt->nsNr;
+  oldNamespaces = ctxt->xpathCtxt->namespaces;
+
+  for (i = 0; i < len; i++) {
+    ctxt->inst = sort;
+    ctxt->xpathCtxt->contextSize = len;
+    ctxt->xpathCtxt->proximityPosition = i + 1;
+    ctxt->node = list->nodeTab[i];
+    ctxt->xpathCtxt->node = ctxt->node;
+
+    ctxt->xpathCtxt->namespaces = comp->nsList;
+    ctxt->xpathCtxt->nsNr = comp->nsNr;
+
+    res = xmlXPathCompiledEval(comp->comp, ctxt->xpathCtxt);
+    if (res != NULL) {
+      if (res->type != XPATH_STRING)
+        res = xmlXPathConvertString(res);
+      if (number)
+        res = xmlXPathConvertNumber(res);
+    }
+    if (res != NULL) {
+      res->index = i; /* Save original pos for dupl resolv */
+      results[i] = res;
+    } else {
+      results[i] = NULL;
+    }
+  }
+
+  ctxt->xpathCtxt->node = oldNode;
+  ctxt->xpathCtxt->proximityPosition = oldPos;
+  ctxt->xpathCtxt->contextSize = oldSize;
+  ctxt->xpathCtxt->nsNr = oldNsNr;
+  ctxt->xpathCtxt->namespaces = oldNamespaces;
+  ctxt->inst = oldInst;
+
+  return (results);
+}
 
 // Custom sort function that uses JS Intl.Collator for string comparison.
 // This matches Chrome's behavior for accented characters and case sensitivity.
@@ -113,7 +180,7 @@ static void xslt_polyfill_sort_function(xsltTransformContextPtr ctxt,
   if (sorts[0] == NULL) {
     return;
   }
-  comp = sorts[0]->psvi;
+  comp = (const xsltStylePreComp *)sorts[0]->psvi;
   if (comp == NULL) {
     return;
   }
@@ -123,7 +190,7 @@ static void xslt_polyfill_sort_function(xsltTransformContextPtr ctxt,
   }
   for (j = 0; j < nbsorts; j++) {
     xmlChar *evaluated_lang;
-    comp = sorts[j]->psvi;
+    comp = (const xsltStylePreComp *)sorts[j]->psvi;
     if ((comp->stype == NULL) && (comp->has_stype != 0)) {
       xmlChar *stype =
           xsltEvalAttrValueTemplate(ctxt, sorts[j], BAD_CAST "data-type", NULL);
@@ -166,8 +233,7 @@ static void xslt_polyfill_sort_function(xsltTransformContextPtr ctxt,
 
   len = list->nodeNr;
 
-  resultsTab[0] =
-      xsltComputeSortResultInternal(ctxt, sorts[0], number[0], NULL);
+  resultsTab[0] = xslt_polyfill_compute_sort_result(ctxt, sorts[0], number[0]);
   for (i = 1; i < XSLT_MAX_SORT; i++)
     resultsTab[i] = NULL;
 
@@ -212,13 +278,13 @@ static void xslt_polyfill_sort_function(xsltTransformContextPtr ctxt,
           while (depth < nbsorts) {
             if (sorts[depth] == NULL)
               break;
-            comp = sorts[depth]->psvi;
+            comp = (const xsltStylePreComp *)sorts[depth]->psvi;
             if (comp == NULL)
               break;
 
             if (resultsTab[depth] == NULL)
-              resultsTab[depth] = xsltComputeSortResultInternal(
-                  ctxt, sorts[depth], number[depth], NULL);
+              resultsTab[depth] = xslt_polyfill_compute_sort_result(
+                  ctxt, sorts[depth], number[depth]);
             res = resultsTab[depth];
             if (res == NULL)
               break;
@@ -286,8 +352,8 @@ static void xslt_polyfill_sort_function(xsltTransformContextPtr ctxt,
 
 cleanup:
   for (j = 0; j < nbsorts; j++) {
-    comp = sorts[j]->psvi;
-    if (lang[j] != NULL && (xmlChar *)lang[j] != comp->lang) {
+    comp = (const xsltStylePreComp *)sorts[j]->psvi;
+    if (lang[j] != NULL && (const xmlChar *)lang[j] != comp->lang) {
       xmlFree((xmlChar *)lang[j]);
     }
     if (resultsTab[j] != NULL) {
@@ -467,7 +533,7 @@ char* transform(const char* xml_content, int xml_len, const char* xslt_content, 
     xsltSetLoaderFunc(docLoader);
 
     // Parse the input strings into libxml2 documents using their known length.
-    xml_doc = xmlParseMemory(xml_content, xml_len);
+    xml_doc = xmlReadMemory(xml_content, xml_len, "xml", "UTF-8", XML_PARSE_HUGE);
     if (xml_doc == NULL) {
         printf("XSLT Transformation Error: Failed to parse XML document.\n");
         goto cleanup;

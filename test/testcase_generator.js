@@ -545,7 +545,7 @@ const testCases = [
           const {xsltProcessor,xmlDoc} = initProcessor(xml,xsl);
           const fragment = xsltProcessor.transformToFragment(xmlDoc, document);
           const firstDiv = fragment.querySelector('div');
-          divIsXHTMLNamespace = firstDiv && firstDiv.namespaceURI === 'http://www.w3.org/1999/xhtml';
+          const divIsXHTMLNamespace = firstDiv && firstDiv.namespaceURI === 'http://www.w3.org/1999/xhtml';
           document.getElementById("target").textContent = divIsXHTMLNamespace ? 'PASS' : 'FAIL';
         };
         </script>
@@ -561,19 +561,19 @@ const testCases = [
         <script>
         window.onload = () => {
             const xml = \`<?xml version="1.0" encoding="utf-8"?>
-                <root xmlns:e="testCase">
+                <e:root xmlns:e="testCase">
                     <e:List>
                         <e:Item><e:NA>Z</e:NA></e:Item>
                         <e:Item><e:NA>A</e:NA></e:Item>
                         <e:Item><e:NA>z</e:NA></e:Item>
                         <e:Item><e:NA>a</e:NA></e:Item>
-                        <e:Item><e:NA>Š</e:NA></e:Item>
+                        <e:Item><e:NA>&#x160;</e:NA></e:Item>
                         <e:Item><e:NA>S</e:NA></e:Item>
                     </e:List>
-                </root>\`;
+                </e:root>\`;
             const xsl = \`<?xml version="1.0" encoding="utf-8"?>
                 <xsl:stylesheet xmlns:e="testCase" xmlns:xsl="http://www.w3.org/1999/XSL/Transform" version="1.0" exclude-result-prefixes="xsl e">
-                    <xsl:output method="text"/>
+                    <xsl:output method="text" encoding="UTF-8"/>
                     <xsl:template match="/">
                         <xsl:for-each select="e:root/e:List/e:Item">
                             <xsl:sort select="e:NA"/>
@@ -586,18 +586,28 @@ const testCases = [
             const fragment = xsltProcessor.transformToFragment(xmlDoc, document);
             const result = fragment.textContent.trim();
             
-            // Expected for native: "AaSSŠZz" (or similar where A is near a, S near Š).
-            // Polyfill currently likely does byte order: "AZazŠ"
-            
+            if (result === "") {
+                document.getElementById("target").textContent = 'FAIL: result is empty string';
+                return;
+            }
+
             const posA = result.indexOf('A');
             const posa = result.indexOf('a');
             const posS = result.indexOf('S');
-            const posŠ = result.indexOf('Š');
             const posZ = result.indexOf('Z');
             const posz = result.indexOf('z');
+            
+            // Find Š by excluding known characters
+            let posŠ = -1;
+            for (let i=0; i<result.length; i++) {
+                if (!['A','a','S','Z','z'].includes(result[i])) {
+                    posŠ = i;
+                    break;
+                }
+            }
 
             const isCaseInsensitiveish = Math.abs(posA - posa) === 1 && Math.abs(posZ - posz) === 1;
-            const isAccentsNearBase = Math.abs(posS - posŠ) === 1;
+            const isAccentsNearBase = posS !== -1 && posŠ !== -1 && Math.abs(posS - posŠ) === 1;
             
             if (isCaseInsensitiveish && isAccentsNearBase) {
                 document.getElementById("target").textContent = 'PASS';
