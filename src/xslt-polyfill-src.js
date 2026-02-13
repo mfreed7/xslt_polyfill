@@ -504,7 +504,8 @@
       targetElement.replaceChildren(fragment);
       // Since all of the scripts above will run after the document load, we
       // fire a synthetic one, to make sure `addEventListener('load')` works.
-      window.dispatchEvent(new CustomEvent('load', {bubbles: false, cancelable: false}));
+      document.dispatchEvent(new Event('DOMContentLoaded', {bubbles: true, cancelable: true}));
+      window.dispatchEvent(new Event('load', {bubbles: false, cancelable: false}));
     }
 
     // If we're polyfilling, we need to patch `document.createElement()`, because

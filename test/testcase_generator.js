@@ -617,6 +617,32 @@ const testCases = [
         };
         </script>
         </body>`,
+},
+{
+    name: 'Window Load Event',
+    xml: `<?xml version="1.0" encoding="UTF-8"?>
+        <?xml-stylesheet type="text/xsl" href="{{XSL_HREF}}"?>
+        <document>
+            {{SCRIPT_INJECTION_LOCATION}}
+            FAIL!!!
+        </document>`,
+    xsl: `<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+        <xsl:output method="html"/>
+        <xsl:template match="/">
+            <body>
+                <div id="target" style="color:red">FAIL!!!</div>
+                <script>
+                    window.addEventListener('load', () => {
+                        const div = document.getElementById('target');
+                        if (div) {
+                            div.style.color = 'green';
+                            div.textContent = 'PASS';
+                        }
+                    });
+                </script>
+            </body>
+        </xsl:template>
+    </xsl:stylesheet>`,
 }
 ];
 
