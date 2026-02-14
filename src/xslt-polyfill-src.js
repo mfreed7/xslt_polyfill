@@ -81,6 +81,11 @@
         if (!importedDoc || !importedDoc.documentElement) {
             continue;
         }
+        const attrs = importedDoc.documentElement.getAttributeNames();
+        for(const attr of attrs) {
+          if(!xsltsheet.documentElement.getAttribute(attr))
+            xsltsheet.documentElement.setAttribute(attr,importedDoc.documentElement.getAttribute(attr));
+        }
         while (importedDoc.documentElement.firstChild) {
           const nodeToImport = importedDoc.documentElement.firstChild;
           if (isDuplicateParam(nodeToImport, xsltsheet, xslns)) {
@@ -225,7 +230,6 @@
               resultString = `<html xmlns="http://www.w3.org/1999/xhtml">\n<head><title></title></head>\n<body>\n<pre>${resultString}</pre>\n</body>\n</html>`;
               mimeTypeString = 'application/xml';
             }
-
             return {
                 content: resultString,
                 mimeType: mimeTypeString
@@ -389,7 +393,7 @@
     function absoluteUrl(url) {
       return new URL(url, window.location.href).href;
     }
-  
+
     async function loadXmlWithXsltFromBytes(xmlBytes, xmlUrl) {
       xmlUrl = absoluteUrl(xmlUrl);
       // Look inside XML file for a processing instruction with an XSLT file.
@@ -408,13 +412,13 @@
           xsltPath = hrefMatch.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, '\'').replace(/&amp;/g, '&');
         }
       }
-  
+
       if (!xsltPath) {
         // Do not display an error, just leave the original content.
         console.warn(`XSLT Polyfill: No XSLT processing instruction found in ${xmlUrl}`);
         return;
       }
-  
+
       // Fetch the XSLT file, resolving its path relative to the XML file's URL.
       const xsltUrl = new URL(xsltPath, xmlUrl);
       const xsltDoc = await loadDoc(xsltUrl.href, 'default');
@@ -494,6 +498,9 @@
         textArea.setHTMLUnsafe(oldScript.textContent);
         newScript.textContent = textArea.value;
         oldScript.parentNode.replaceChild(newScript, oldScript);
+        newScript.addEventListener('load',() => 
+          window.dispatchEvent(new CustomEvent('scriptsloaded', {bubbles: false, cancelable: false}))
+        );
       });
       // The html element could have attributes - copy them.
       if (targetElement instanceof HTMLHtmlElement) {
@@ -504,7 +511,14 @@
       targetElement.replaceChildren(fragment);
       // Since all of the scripts above will run after the document load, we
       // fire a synthetic one, to make sure `addEventListener('load')` works.
-      window.dispatchEvent(new CustomEvent('load', {bubbles: false, cancelable: false}));
+      if(scripts.length > 0) {
+        let numloaded = 0;
+        window.addEventListener('scriptsloaded', () => {
+          numloaded = numloaded + 1;
+          if(numloaded === scripts.length)
+            window.dispatchEvent(new CustomEvent('load', {bubbles: false, cancelable: false}));
+        });
+      }
     }
 
     // If we're polyfilling, we need to patch `document.createElement()`, because
