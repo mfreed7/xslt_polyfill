@@ -16,7 +16,7 @@ const UTILITIES = `
 `;
 
 const testCases = [
-{
+  {
     name: 'Basic Transformation',
     xml: `<?xml version="1.0"?>
         <?xml-stylesheet type="text/xsl" href="{{XSL_HREF}}"?>
@@ -32,8 +32,8 @@ const testCases = [
             <div style="color:green">PASS</div>
         </xsl:template>
         </xsl:stylesheet>`,
-},
-{
+  },
+  {
     name: 'EXSLT Support',
     xml: `<?xml version="1.0"?>
         <?xml-stylesheet type="text/xsl" href="{{XSL_HREF}}"?>
@@ -62,8 +62,8 @@ const testCases = [
             </div>
         </xsl:template>
         </xsl:stylesheet>`,
-},
-{
+  },
+  {
     name: 'Script Execution in Output',
     xml: `<?xml version="1.0" encoding="UTF-8"?>
         <?xml-stylesheet type="text/xsl" href="{{XSL_HREF}}"?>
@@ -84,9 +84,9 @@ const testCases = [
                 </body>
             </xsl:template>
         </xsl:stylesheet>`,
-},
-{
-    name: 'document(\'\') Functionality',
+  },
+  {
+    name: "document('') Functionality",
     xml: `<?xml version="1.0"?>
         <?xml-stylesheet type="text/xsl" href="{{XSL_HREF}}"?>
         <content>
@@ -106,8 +106,8 @@ const testCases = [
             <xsl:copy-of select="$stylesheetData/div"/>
         </xsl:template>
         </xsl:stylesheet>`,
-},
-{
+  },
+  {
     name: 'Blank result',
     html: `
         <!DOCTYPE html>
@@ -134,8 +134,8 @@ const testCases = [
         };
         </script>
         </body>`,
-},
-{
+  },
+  {
     name: 'Empty XML document source',
     html: `
         <!DOCTYPE html>
@@ -167,8 +167,8 @@ const testCases = [
         };
         </script>
         </body>`,
-},
-{
+  },
+  {
     name: 'Multiple root nodes',
     html: `
         <!DOCTYPE html>
@@ -196,8 +196,8 @@ const testCases = [
             document.getElementById("target").textContent = 'PASS';
         };
         </script>`,
-},
-{
+  },
+  {
     name: 'XSLTProcessor output (HTML)',
     html: `
         <!DOCTYPE html>
@@ -232,8 +232,8 @@ const testCases = [
             document.getElementById("target").textContent = 'PASS';
         };
         </script>`,
-},
-{
+  },
+  {
     name: 'XSLTProcessor output (XML)',
     html: `
         <!DOCTYPE html>
@@ -268,8 +268,8 @@ const testCases = [
             document.getElementById("target").textContent = 'PASS';
         };
         </script>`,
-},
-{
+  },
+  {
     name: 'XSLTProcessor output (text)',
     html: `
         <!DOCTYPE html>
@@ -304,8 +304,8 @@ const testCases = [
             document.getElementById("target").textContent = 'PASS';
         };
         </script>`,
-},
-{
+  },
+  {
     name: 'XSLTProcessor output (blank, html content)',
     html: `
         <!DOCTYPE html>
@@ -339,8 +339,8 @@ const testCases = [
             document.getElementById("target").textContent = 'PASS';
         };
         </script>`,
-},
-{
+  },
+  {
     name: 'XSLTProcessor output (blank, non-html content)',
     html: `
         <!DOCTYPE html>
@@ -373,8 +373,8 @@ const testCases = [
             document.getElementById("target").textContent = 'PASS';
         };
         </script>`,
-},
-{
+  },
+  {
     name: 'transformToDocument structure',
     html: `
         <!DOCTYPE html>
@@ -417,9 +417,9 @@ const testCases = [
         };
         </script>
         </body>`,
-},
-{
-    name: "XML Output",
+  },
+  {
+    name: 'XML Output',
     xml: `<?xml version="1.0"?>
         <?xml-stylesheet type="text/xsl" href="{{XSL_HREF}}"?>
         <content>
@@ -435,8 +435,8 @@ const testCases = [
             </body>
         </xsl:template>
         </xsl:stylesheet>`,
-},
-{
+  },
+  {
     name: 'Text Output',
     html: `
         <!DOCTYPE html>
@@ -471,8 +471,8 @@ const testCases = [
         };
         </script>
         </body>`,
-},
-{
+  },
+  {
     name: 'Script Arrow Function',
     xml: `<?xml version="1.0" encoding="UTF-8"?>
         <?xml-stylesheet type="text/xsl" href="{{XSL_HREF}}"?>
@@ -497,8 +497,8 @@ const testCases = [
             </body>
         </xsl:template>
         </xsl:stylesheet>`,
-},
-{
+  },
+  {
     name: 'Script RegExp Entity',
     xml: `<?xml version="1.0" encoding="UTF-8"?>
         <?xml-stylesheet type="text/xsl" href="{{XSL_HREF}}"?>
@@ -522,8 +522,8 @@ const testCases = [
             </body>
         </xsl:template>
         </xsl:stylesheet>`,
-},
-{
+  },
+  {
     name: 'Namespace URI in Fragment',
     html: `
         <!DOCTYPE html>
@@ -550,8 +550,8 @@ const testCases = [
         };
         </script>
         </body>`,
-},
-{
+  },
+  {
     name: 'Sorting Accents and Case',
     html: `
         <!DOCTYPE html>
@@ -617,8 +617,8 @@ const testCases = [
         };
         </script>
         </body>`,
-},
-{
+  },
+  {
     name: 'Load and DOMContentLoaded Events',
     xml: `<?xml version="1.0" encoding="UTF-8"?>
         <?xml-stylesheet type="text/xsl" href="{{XSL_HREF}}"?>
@@ -647,9 +647,8 @@ const testCases = [
             </body>
         </xsl:template>
     </xsl:stylesheet>`,
-}
+  },
 ];
-
 
 const fs = require('fs');
 const path = require('path');
@@ -661,21 +660,21 @@ if (!fs.existsSync(outputDir)) {
 
 const scriptInjections = {
   native: '',
-    source: `<script xmlns="http://www.w3.org/1999/xhtml">window.xsltUsePolyfillAlways = true;</script>
+  source: `<script xmlns="http://www.w3.org/1999/xhtml">window.xsltUsePolyfillAlways = true;</script>
     <script src="../../dist/xslt-wasm.js" xmlns="http://www.w3.org/1999/xhtml" charset="utf-8"></script>
     <script src="../../src/xslt-polyfill-src.js" xmlns="http://www.w3.org/1999/xhtml"></script>`,
-    minified: `<script xmlns="http://www.w3.org/1999/xhtml">window.xsltUsePolyfillAlways = true;</script>
+  minified: `<script xmlns="http://www.w3.org/1999/xhtml">window.xsltUsePolyfillAlways = true;</script>
     <script src="../../xslt-polyfill.min.js" xmlns="http://www.w3.org/1999/xhtml" charset="utf-8"></script>`,
 };
 
 const generatedTestCases = {};
 
-testCases.forEach(testCase => {
+testCases.forEach((testCase) => {
   const baseName = testCase.name.replace(/[^a-zA-Z0-9]/g, '_');
-  
+
   if (!generatedTestCases[testCase.name]) {
     const testCaseEntry = { name: testCase.name };
-    ['xml', 'xsl', 'html'].forEach(ext => {
+    ['xml', 'xsl', 'html'].forEach((ext) => {
       if (testCase[ext]) {
         const fileName = `${baseName}_{{MODE}}.${ext}`;
         testCaseEntry[ext] = `generated/${fileName}`;
@@ -684,23 +683,26 @@ testCases.forEach(testCase => {
     generatedTestCases[testCase.name] = testCaseEntry;
   }
 
-  Object.keys(scriptInjections).forEach(type => {
+  Object.keys(scriptInjections).forEach((type) => {
     const suffix = `_${type}`;
     const scriptInjection = scriptInjections[type];
 
-    ['xml', 'xsl', 'html'].forEach(ext => {
+    ['xml', 'xsl', 'html'].forEach((ext) => {
       if (testCase[ext]) {
         let content = testCase[ext];
         const fileName = `${baseName}${suffix}.${ext}`;
         const filePath = path.join(outputDir, fileName);
 
-        content = content.replace('{{SCRIPT_INJECTION_LOCATION}}', scriptInjection);
+        content = content.replace(
+          '{{SCRIPT_INJECTION_LOCATION}}',
+          scriptInjection,
+        );
 
         if (ext === 'xml' && testCase.xsl) {
           const xslFileName = `${baseName}${suffix}.xsl`;
           content = content.replace('{{XSL_HREF}}', `./${xslFileName}`);
         }
-        
+
         //This is a special case for the basic transform, which has a hard-coded XSLT href
         if (testCase.name === 'Basic Transformation' && ext === 'xml') {
           content = content.replace('demo.xsl', `${baseName}${suffix}.xsl`);
@@ -714,6 +716,8 @@ testCases.forEach(testCase => {
 });
 
 const finalTestCases = Object.values(generatedTestCases);
-fs.writeFileSync(path.join(outputDir, 'file_list.json'), JSON.stringify(finalTestCases, null, 2));
+fs.writeFileSync(
+  path.join(outputDir, 'file_list.json'),
+  JSON.stringify(finalTestCases, null, 2),
+);
 console.log(`Generated ${path.join(outputDir, 'file_list.json')}`);
-
