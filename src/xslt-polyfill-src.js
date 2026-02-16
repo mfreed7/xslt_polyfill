@@ -503,9 +503,11 @@
       }
       targetElement.replaceChildren(fragment);
       // Since all of the scripts above will run after the document load, we
-      // fire a synthetic one, to make sure `addEventListener('load')` works.
-      document.dispatchEvent(new Event('DOMContentLoaded', {bubbles: true, cancelable: true}));
-      window.dispatchEvent(new Event('load', {bubbles: false, cancelable: false}));
+      // fire synthetic ones, to make sure 'load' and 'DOMContentLoaded' work.
+      setTimeout(() => {
+        document.dispatchEvent(new Event('DOMContentLoaded', {bubbles: true, cancelable: true}));
+        window.dispatchEvent(new Event('load', {bubbles: false, cancelable: false}));
+      }, 0);
     }
 
     // If we're polyfilling, we need to patch `document.createElement()`, because
@@ -547,7 +549,7 @@
     if (document.readyState === "loading") {
       document.addEventListener("DOMContentLoaded", () => {
         parseAndReplaceCurrentXMLDoc(document);
-      });
+      },{once: true});
     } else {
       parseAndReplaceCurrentXMLDoc(document);
     }

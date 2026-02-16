@@ -619,7 +619,7 @@ const testCases = [
         </body>`,
 },
 {
-    name: 'Window Load Event',
+    name: 'Load and DOMContentLoaded Events',
     xml: `<?xml version="1.0" encoding="UTF-8"?>
         <?xml-stylesheet type="text/xsl" href="{{XSL_HREF}}"?>
         <document>
@@ -632,13 +632,17 @@ const testCases = [
             <body>
                 <div id="target" style="color:red">FAIL!!!</div>
                 <script>
-                    window.addEventListener('load', () => {
-                        const div = document.getElementById('target');
-                        if (div) {
+                    const events = {};
+                    const check = (e) => {
+                        events[e.type] = true;
+                        if (events['load'] &amp;&amp; events['DOMContentLoaded']) {
+                            const div = document.getElementById('target');
                             div.style.color = 'green';
                             div.textContent = 'PASS';
                         }
-                    });
+                    };
+                    window.addEventListener('load', check);
+                    document.addEventListener('DOMContentLoaded', check);
                 </script>
             </body>
         </xsl:template>
