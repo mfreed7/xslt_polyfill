@@ -648,6 +648,48 @@ const testCases = [
     </xsl:stylesheet>`,
   },
   {
+    name: 'Synchronized External Script Loading',
+    xml: `<?xml version="1.0" encoding="UTF-8"?>
+        <?xml-stylesheet type="text/xsl" href="{{XSL_HREF}}"?>
+        <document>
+            {{SCRIPT_INJECTION_LOCATION}}
+            FAIL!!!
+        </document>`,
+    get xsl() {
+      // Use a large data URI to simulate a slow-loading external script.
+      // This ensures the load event won't fire "accidentally" fast.
+      const padding = " ".repeat(1024 * 1024 * 2); // 2MB padding
+      const scriptContent = "window.externalScriptLoaded = true; /* " + padding + " */";
+      const scriptSrc = "data:text/javascript;base64," + Buffer.from(scriptContent).toString('base64');
+      
+      return `<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+        <xsl:output method="html"/>
+        <xsl:template match="/">
+            <body>
+                <div id="target" style="color:red">FAIL!!!</div>
+                <script>window.externalScriptLoaded = false;</script>
+                <script src="${scriptSrc}"></script>
+                <script>
+                    const div = document.getElementById('target');
+                    if (window.externalScriptLoaded !== false) {
+                        div.textContent = 'FAIL: Test invalid - external script loaded too fast';
+                    } else {
+                        window.addEventListener('load', (e) => {
+                            if (window.externalScriptLoaded === true) {
+                                div.style.color = 'green';
+                                div.textContent = 'PASS';
+                            } else {
+                                div.textContent = 'FAIL: load event fired BEFORE external script loaded';
+                            }
+                        });
+                    }
+                </script>
+            </body>
+        </xsl:template>
+    </xsl:stylesheet>`;
+    }
+  },
+  {
     name: 'Import Attribute Merge',
     xml: `<?xml version="1.0"?>
         <?xml-stylesheet type="text/xsl" href="{{XSL_HREF}}"?>

@@ -529,11 +529,31 @@
       // Scripts need to be re-created, so they will execute:
       const scripts = fragment.querySelectorAll('script');
       const textArea = document.createElementNS('http://www.w3.org/1999/xhtml', 'textarea');
+      let pendingScripts = 0;
+      let contentInserted = false;
+      let eventsFired = false;
+      const dispatchEvents = () => {
+        if (eventsFired || !contentInserted || pendingScripts > 0) {
+          return;
+        }
+        eventsFired = true;
+        document.dispatchEvent(new Event('DOMContentLoaded', { bubbles: true, cancelable: true }));
+        window.dispatchEvent(new Event('load', { bubbles: false, cancelable: false }));
+      };
+      const onScriptDone = () => {
+        --pendingScripts;
+        dispatchEvents();
+      };
       scripts.forEach((oldScript) => {
         const newScript = document.createElementNS('http://www.w3.org/1999/xhtml', 'script');
         Array.from(oldScript.attributes).forEach((attr) => {
           newScript.setAttribute(attr.name, attr.value);
         });
+        if (newScript.hasAttribute('src')) {
+          ++pendingScripts;
+          newScript.addEventListener('load', onScriptDone);
+          newScript.addEventListener('error', onScriptDone);
+        }
         // Because the original XSLT doc is serialized with
         // `XMLSerializer().serializeToString(compiledXsltDoc)` above, the
         // contents of the script will have been treated as XML children of the
@@ -555,12 +575,10 @@
         }
       }
       targetElement.replaceChildren(fragment);
+      contentInserted = true;
       // Since all of the scripts above will run after the document load, we
       // fire synthetic ones, to make sure 'load' and 'DOMContentLoaded' work.
-      setTimeout(() => {
-        document.dispatchEvent(new Event('DOMContentLoaded', { bubbles: true, cancelable: true }));
-        window.dispatchEvent(new Event('load', { bubbles: false, cancelable: false }));
-      }, 0);
+      setTimeout(dispatchEvents, 0);
     }
 
     // If we're polyfilling, we need to patch `document.createElement()`, because
