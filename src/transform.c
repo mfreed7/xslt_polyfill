@@ -49,9 +49,15 @@ EM_JS(const char *, fetch_and_load_document, (const char *url), {
         })
         .catch(function(err) {
           console.error(
-              `XSLT Polyfill: Failed to fetch an external document included via <xsl:import> or <xsl:include>.
-URL: ${UTF8ToString(url)}
-This is often due to the browsers CORS (Cross-Origin Resource Sharing) policy. This polyfill uses the standard fetch() API, which is more restrictive than a native browsers XSLT engine. Please check the browsers network console for more details about the failed request.`);
+              "XSLT Polyfill: Failed to fetch an external document included " +
+              "via <xsl:import> or <xsl:include>.\n" +
+              "URL: " + UTF8ToString(url) + "\n" +
+              "This is often due to the browser's CORS (Cross-Origin Resource " +
+              "Sharing) policy. " +
+              "This polyfill uses the standard `fetch()` API, which is more " +
+              "restrictive than a native browser's XSLT engine. " +
+              "Please check the browser's network console for more details " +
+              "about the failed request.");
           wakeUp(null);
         });
   });
