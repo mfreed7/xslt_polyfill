@@ -49,15 +49,9 @@ EM_JS(const char *, fetch_and_load_document, (const char *url), {
         })
         .catch(function(err) {
           console.error(
-              "XSLT Polyfill: Failed to fetch an external document included "
-              "via <xsl:import> or <xsl:include>.\n" +
-              "URL: " + UTF8ToString(url) + "\n" +
-              "This is often due to the browser's CORS (Cross-Origin Resource "
-              "Sharing) policy. " +
-              "This polyfill uses the standard `fetch()` API, which is more "
-              "restrictive than a native browser's XSLT engine. " +
-              "Please check the browser's network console for more details "
-              "about the failed request.");
+              `XSLT Polyfill: Failed to fetch an external document included via <xsl:import> or <xsl:include>.
+URL: ${UTF8ToString(url)}
+This is often due to the browsers CORS (Cross-Origin Resource Sharing) policy. This polyfill uses the standard fetch() API, which is more restrictive than a native browsers XSLT engine. Please check the browsers network console for more details about the failed request.`);
           wakeUp(null);
         });
   });
@@ -368,6 +362,18 @@ cleanup:
 static xmlDocPtr docLoader(const xmlChar *URI, xmlDictPtr dict, int options,
                            void *ctxt, xsltLoadType type) {
   const char *url = (const char *)URI;
+
+  // Check if this is the stylesheet itself (for document('')).
+  // This avoids a redundant fetch and potential Asyncify suspension issues.
+  xsltTransformContextPtr tctxt = (xsltTransformContextPtr)ctxt;
+  if (tctxt && tctxt->style && tctxt->style->doc) {
+    if (URI == NULL || URI[0] == '\0' ||
+        (tctxt->style->doc->URL &&
+         xmlStrEqual(URI, (const xmlChar *)tctxt->style->doc->URL))) {
+      return xmlCopyDoc(tctxt->style->doc, 1);
+    }
+  }
+
   printf("Loading external document from URL %s...\n", url);
   const char *content = fetch_and_load_document(url);
 
