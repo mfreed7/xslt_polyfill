@@ -25,8 +25,7 @@ const testCases = [
             <message>FAIL!!!</message>
         </page>
     `,
-    xsl: `<?xml version="1.0" encoding="UTF-8"?>
-        <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+    xsl: `<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
         <xsl:output method="html"/>
         <xsl:template match="/">
             <div style="color:green">PASS</div>
@@ -648,6 +647,25 @@ const testCases = [
         </xsl:template>
     </xsl:stylesheet>`,
   },
+  {
+    name: 'Import Attribute Merge',
+    xml: `<?xml version="1.0"?>
+        <?xml-stylesheet type="text/xsl" href="{{XSL_HREF}}"?>
+        <page>
+            {{SCRIPT_INJECTION_LOCATION}}
+            <message>FAIL!!!</message>
+        </page>
+    `,
+    xsl: `<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+        <xsl:import href="data:text/xml,&lt;xsl:stylesheet version='1.0' xmlns:xsl='http://www.w3.org/1999/XSL/Transform' my-imported-attr='PASS'&gt;&lt;/xsl:stylesheet&gt;"/>
+        <xsl:output method="html"/>
+        <xsl:template match="/">
+            <div style="color:green">
+                <xsl:value-of select="document('')/*/@my-imported-attr"/>
+            </div>
+        </xsl:template>
+        </xsl:stylesheet>`,
+  },
 ];
 
 const fs = require('fs');
@@ -693,10 +711,7 @@ testCases.forEach((testCase) => {
         const fileName = `${baseName}${suffix}.${ext}`;
         const filePath = path.join(outputDir, fileName);
 
-        content = content.replace(
-          '{{SCRIPT_INJECTION_LOCATION}}',
-          scriptInjection,
-        );
+        content = content.replace('{{SCRIPT_INJECTION_LOCATION}}', scriptInjection);
 
         if (ext === 'xml' && testCase.xsl) {
           const xslFileName = `${baseName}${suffix}.xsl`;
@@ -716,8 +731,5 @@ testCases.forEach((testCase) => {
 });
 
 const finalTestCases = Object.values(generatedTestCases);
-fs.writeFileSync(
-  path.join(outputDir, 'file_list.json'),
-  JSON.stringify(finalTestCases, null, 2),
-);
+fs.writeFileSync(path.join(outputDir, 'file_list.json'), JSON.stringify(finalTestCases, null, 2));
 console.log(`Generated ${path.join(outputDir, 'file_list.json')}`);

@@ -81,6 +81,14 @@
         if (!importedDoc || !importedDoc.documentElement) {
           continue;
         }
+        const importedDocRoot = importedDoc.documentElement;
+        const xsltDocRoot = xsltsheet.documentElement;
+        const attrs = importedDocRoot.getAttributeNames();
+        for (const attr of attrs) {
+          if (!xsltDocRoot.getAttribute(attr)) {
+            xsltDocRoot.setAttribute(attr, importedDocRoot.getAttribute(attr));
+          }
+        }
         while (importedDoc.documentElement.firstChild) {
           const nodeToImport = importedDoc.documentElement.firstChild;
           if (isDuplicateParam(nodeToImport, xsltsheet, xslns)) {
