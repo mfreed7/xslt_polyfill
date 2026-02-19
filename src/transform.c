@@ -38,7 +38,7 @@ EM_JS(const char *, fetch_and_load_document, (const char *url), {
           return response.text();
         })
         .then(function(text) {
-          if (text == = null) {
+          if (text === null) {
             wakeUp(null);
             return;
           }
@@ -68,12 +68,12 @@ EM_JS(int, js_collate,
         try {
           const str1 = UTF8ToString(s1);
           const str2 = UTF8ToString(s2);
-          const l = (lang &&lang != = "") ? UTF8ToString(lang) : undefined;
+          const l = (lang && lang !== "") ? UTF8ToString(lang) : undefined;
 
           const options = {usage : 'sort', sensitivity : 'variant'};
-          if (lowerFirst == = 1)
+          if (lowerFirst === 1)
             options.caseFirst = 'lower';
-          else if (lowerFirst == = 0)
+          else if (lowerFirst === 0)
             options.caseFirst = 'upper';
 
           return str1.localeCompare(str2, l, options);
