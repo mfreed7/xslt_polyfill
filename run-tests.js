@@ -27,23 +27,29 @@ const puppeteer = require('puppeteer');
 
     // 3. Wait for iframes to load/error, then extract and concatenate their text
     const fullTextOutput = await page.evaluate(async () => {
-      const iframes = Array.from(document.querySelectorAll('iframe'));
+      // Wait for at least one iframe to be added to the DOM
+      const iframes = await new Promise(resolve => {
+        const check = () => {
+          const found = Array.from(document.querySelectorAll('iframe'));
+          if (found.length > 0) resolve(found);
+          else setTimeout(check, 100);
+        };
+        check();
+      });
       
-      // Wait for all iframes to fire load or error
-      await Promise.all(iframes.map(iframe => {
-        return new Promise(resolve => {
-          try {
-            const doc = iframe.contentDocument || iframe.contentWindow.document;
-            // If it's already completely loaded, resolve immediately
-            if (doc && doc.readyState === 'complete' && doc.location.href !== 'about:blank') {
-              return resolve();
-            }
-          } catch (e) {} // Ignore cross-origin read errors during check
-
-          iframe.addEventListener('load', resolve);
-          iframe.addEventListener('error', resolve);
-        });
-      }));
+      // Wait for all tests to finish (reaching PASS or FAIL state)
+      // These variables are global in test_suite.html
+      await new Promise(resolve => {
+        const check = () => {
+          if (typeof passCount !== 'undefined' && typeof failCount !== 'undefined' && 
+              (passCount + failCount) === iframes.length) {
+            resolve();
+          } else {
+            setTimeout(check, 100);
+          }
+        };
+        check();
+      });
 
       // Recursive text extraction to maintain DOM order
       function extractSequentialText(node) {
@@ -72,9 +78,7 @@ const puppeteer = require('puppeteer');
             const rootNode = doc.body || doc.documentElement;
             if (!rootNode) return '';
 
-            // Fallback to textContent if innerText is missing on the node
-            const text = rootNode.innerText || rootNode.textContent || '';
-            return text.trim();
+            return extractSequentialText(rootNode);
           } catch (e) {
             return '[Error reading iframe content]';
           }

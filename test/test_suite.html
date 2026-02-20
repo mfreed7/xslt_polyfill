@@ -107,7 +107,8 @@
       try {
         const doc = iframe.contentDocument || iframe.contentWindow.document;
         if (!doc || !doc.documentElement) return;
-        const text = (doc.body ? (doc.body.innerText || doc.body.textContent) : "") + " " + doc.documentElement.textContent;
+        const rootNode = doc.body || doc.documentElement;
+        const text = (rootNode.innerText !== undefined) ? rootNode.innerText : (rootNode.textContent || "");
         const upperText = text.toUpperCase();
         if (upperText.includes('PASS')) {
           const duration = performance.now() - startTime;
