@@ -18,6 +18,7 @@ fi
 OUT_FILE="${BUILD_DIR}/xslt-wasm.js"
 EMCC_OPT_LEVEL="-Os"
 EMCC_ASSERTIONS="-s ASSERTIONS=0"
+EMCC_SAFE_HEAP="-s SAFE_HEAP=0"
 EMCC_ASYNCIFY_DEBUG=""
 EMCC_DEBUG_FLAGS=""
 
@@ -25,6 +26,7 @@ if [ "$BUILD_MODE" == "debug" ]; then
   OUT_FILE="${BUILD_DIR}/xslt-wasm-debug.js"
   EMCC_OPT_LEVEL="-O0"
   EMCC_ASSERTIONS="-s ASSERTIONS=2"
+  EMCC_SAFE_HEAP="-s SAFE_HEAP=1"
   EMCC_ASYNCIFY_DEBUG="-s ASYNCIFY_DEBUG=1"
   EMCC_DEBUG_FLAGS="-gsource-map"
   echo "--- Building in DEBUG mode ---"
@@ -57,9 +59,9 @@ emcc ${EMCC_OPT_LEVEL} ${EMCC_DEBUG_FLAGS} \
   -s SINGLE_FILE \
   -s SINGLE_FILE_BINARY_ENCODE=1 \
   -s ALLOW_MEMORY_GROWTH \
-  -s SAFE_HEAP \
+  ${EMCC_SAFE_HEAP} \
   ${EMCC_ASSERTIONS} \
-  -s INITIAL_MEMORY=130MB \
+  -s INITIAL_MEMORY=32MB \
   -s STACK_SIZE=5MB \
   -s EXPORT_NAME=createXSLTTransformModule \
   -s EXPORTED_FUNCTIONS=_transform,_malloc,_free,Asyncify \

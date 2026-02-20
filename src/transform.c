@@ -63,11 +63,26 @@ EM_JS(const char *, fetch_and_load_document, (const char *url), {
   });
 });
 
+EM_JS(void, clear_collate_cache, (), {
+  Module.stringCache = new Map();
+});
+
 EM_JS(int, js_collate,
       (const char *s1, const char *s2, const char *lang, int lowerFirst), {
         try {
-          const str1 = UTF8ToString(s1);
-          const str2 = UTF8ToString(s2);
+          if (!Module.stringCache) {
+            Module.stringCache = new Map();
+          }
+          let str1 = Module.stringCache.get(s1);
+          if (str1 === undefined) {
+            str1 = UTF8ToString(s1);
+            Module.stringCache.set(s1, str1);
+          }
+          let str2 = Module.stringCache.get(s2);
+          if (str2 === undefined) {
+            str2 = UTF8ToString(s2);
+            Module.stringCache.set(s2, str2);
+          }
           const l = (lang && lang !== "") ? UTF8ToString(lang) : undefined;
 
           const options = {usage : 'sort', sensitivity : 'variant'};
@@ -390,7 +405,7 @@ static xmlDocPtr docLoader(const xmlChar *URI, xmlDictPtr dict, int options,
     return NULL;
   }
 
-  xmlDocPtr doc = xmlParseDoc((const xmlChar *)content);
+  xmlDocPtr doc = xmlReadMemory(content, strlen(content), url, "UTF-8", XML_PARSE_HUGE);
   if (!doc) {
     printf("XSLT Transformation Error: Failed to parse included document.\n");
   }
@@ -540,6 +555,10 @@ char *transform(const char *xml_content, int xml_len, const char *xslt_content,
   // Initialize the XML library. This is important for thread safety.
   xmlInitParser();
 
+  // Clear JS string cache used for sorting
+  void clear_collate_cache();
+  clear_collate_cache();
+
   // Enable EXSLT functions.
   exsltRegisterAll();
 
@@ -666,10 +685,6 @@ cleanup:
 
   // Unset the loader function.
   xsltSetLoaderFunc(NULL);
-
-  // Clean up the parser variables.
-  xsltCleanupGlobals();
-  xmlCleanupParser();
 
   // Return the allocated string (or NULL on failure).
   return result_string;

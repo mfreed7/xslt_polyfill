@@ -69,18 +69,22 @@
       return new DOMParser().parseFromString(xmltext, 'text/xml');
     }
 
-    function isDuplicateParam(nodeToImport, xsltsheet, xslns) {
-      if (nodeToImport.nodeName !== 'xsl:param') {
+    function isDuplicateParam(nodeToImport, existingParamNames) {
+      if (nodeToImport.localName !== 'param' || nodeToImport.namespaceURI !== 'http://www.w3.org/1999/XSL/Transform') {
         return false;
       }
-      const name = nodeToImport.getAttribute('name');
+      return existingParamNames.has(nodeToImport.getAttribute('name'));
+    }
+
+    function getTopLevelParamNames(xsltsheet, xslns) {
       const params = xsltsheet.documentElement.getElementsByTagNameNS(xslns, 'param');
+      const names = new Set();
       for (const param of params) {
-        if (param.parentElement === xsltsheet.documentElement && param.getAttribute('name') === name) {
-          return true;
+        if (param.parentElement === xsltsheet.documentElement) {
+          names.add(param.getAttribute('name'));
         }
       }
-      return false;
+      return names;
     }
 
     // Recursively fetches and inlines <xsl:import> statements within an XSLT document.
@@ -97,12 +101,24 @@
       if (!relurl) {
         relurl = window.location.href;
       }
-      for (const importElement of imports) {
-        const href = new URL(importElement.getAttribute('href'), relurl).href;
-        const importedDoc = await loadDoc(href, 'default');
+
+      const existingParamNames = getTopLevelParamNames(xsltsheet, xslns);
+
+      // Fetch all imports at this level in parallel.
+      const importDocs = await Promise.all(
+        imports.map(async (importElement) => {
+          const href = new URL(importElement.getAttribute('href'), relurl).href;
+          const importedDoc = await loadDoc(href, 'default');
+          return { importElement, importedDoc, href };
+        }),
+      );
+
+      for (const { importElement, importedDoc, href } of importDocs) {
         if (!importedDoc || !importedDoc.documentElement) {
+          importElement.remove();
           continue;
         }
+
         const importedDocRoot = importedDoc.documentElement;
         const xsltDocRoot = xsltsheet.documentElement;
         const attrs = importedDocRoot.getAttributeNames();
@@ -111,33 +127,32 @@
             xsltDocRoot.setAttribute(attr, importedDocRoot.getAttribute(attr));
           }
         }
-        while (importedDoc.documentElement.firstChild) {
-          const nodeToImport = importedDoc.documentElement.firstChild;
-          if (isDuplicateParam(nodeToImport, xsltsheet, xslns)) {
-            nodeToImport.remove();
-            continue;
-          }
-          if (nodeToImport.nodeName === 'xsl:import') {
-            const newhref = new URL(nodeToImport.getAttribute('href'), href).href;
-            const nestedImportedDoc = await loadDoc(newhref, 'default');
-            if (!nestedImportedDoc) {
-              nodeToImport.remove();
-              continue;
-            }
-            const embed = await compileImports(nestedImportedDoc, newhref);
-            while (embed.documentElement.firstChild) {
-              importElement.before(embed.documentElement.firstChild);
-            }
-            nodeToImport.remove();
-            continue;
-          }
 
-          importElement.before(nodeToImport);
+        // Recursively compile imports within the imported document.
+        await compileImports(importedDoc, href);
+
+        // Move all children from the imported document to the main document.
+        // Special case: skip duplicate parameters if they were already merged.
+        let child = importedDocRoot.firstChild;
+        while (child) {
+          const next = child.nextSibling;
+          if (isDuplicateParam(child, existingParamNames)) {
+            child.remove();
+          } else {
+            if (child.localName === 'param' && child.namespaceURI === xslns) {
+              existingParamNames.add(child.getAttribute('name'));
+            }
+            importElement.before(child);
+          }
+          child = next;
         }
         importElement.remove();
       }
       return xsltsheet;
     }
+
+    const textEncoder = new TextEncoder();
+    const textDecoder = new TextDecoder();
 
     function transformXmlWithXslt(xmlContent, xsltContent, parameters, xsltUrl, allowAsync, buildPlainText) {
       if (!wasm_transform || !WasmModule) {
@@ -145,9 +160,6 @@
           `Polyfill XSLT Wasm module not yet loaded. Please wait for the ${promiseName} promise to resolve.`,
         );
       }
-
-      const textEncoder = new TextEncoder();
-      const textDecoder = new TextDecoder();
 
       let xmlPtr = 0;
       let xsltPtr = 0;
@@ -473,9 +485,8 @@
         return showError(`Failed to fetch XSLT file: ${xsltUrl.href}`);
       }
 
-      // We need to clone the node because compileImports is destructive.
-      const xsltDocClone = xsltDoc.cloneNode(true);
-      const compiledXsltDoc = await compileImports(xsltDocClone, xsltUrl.href);
+      // Compile imports. This inlines them into the stylesheet document.
+      const compiledXsltDoc = await compileImports(xsltDoc, xsltUrl.href);
       const compiledXsltText = new XMLSerializer().serializeToString(compiledXsltDoc);
 
       // Process XML/XSLT and replace the document.
