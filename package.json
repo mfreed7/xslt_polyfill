@@ -2,9 +2,15 @@
   "name": "xslt-polyfill",
   "version": "1.0.18",
   "description": "A polyfill for browser-based XSLTProcessor and friends",
-  "keywords": "XSLT, XML, XSLTProcessor",
+  "keywords": [
+    "XSLT",
+    "XML",
+    "XSLTProcessor"
+  ],
   "homepage": "https://github.com/mfreed7/xslt_polyfill",
-  "bugs": "https://github.com/mfreed7/xslt_polyfill/issues",
+  "bugs": {
+    "url": "https://github.com/mfreed7/xslt_polyfill/issues"
+  },
   "repository": {
     "type": "git",
     "url": "git://github.com/mfreed7/xslt_polyfill.git"
@@ -16,6 +22,14 @@
     "xslt-polyfill.min.js",
     "dist/xslt-wasm.js"
   ],
-  "dependencies": {}
+  "directories": {
+    "test": "test"
+  },
+  "scripts": {
+    "test": "node run-tests.js"
+  },
+  "type": "commonjs",
+  "dependencies": {
+    "puppeteer": "^24.37.5"
+  }
 }
-

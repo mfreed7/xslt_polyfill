@@ -44,6 +44,12 @@
     </thead>
     <tbody>
     </tbody>
+    <tfoot>
+      <tr id="stats-row" style="font-weight: bold; background-color: #f2f2f2;">
+        <td id="stats-cell">0 PASS, 0 FAIL</td>
+        <td></td>
+      </tr>
+    </tfoot>
   </table>
   <p style="font-size: 0.7em; color: #666;">
     Direct test links:
@@ -55,6 +61,15 @@
 </html>
 
 <script>
+  let passCount = 0;
+  let failCount = 0;
+  function updateStats() {
+    const statsCell = document.getElementById('stats-cell');
+    if (statsCell) {
+      statsCell.textContent = `${passCount} PASS, ${failCount} FAIL`;
+    }
+  }
+
   function addTestResult(name, iframe, url) {
     const row = document.createElement('tr');
     const nameCell = document.createElement('td');
@@ -70,6 +85,47 @@
     outputCell.appendChild(iframe);
     row.appendChild(outputCell);
     document.getElementById('results').querySelector('tbody').appendChild(row);
+
+    let counted = false;
+    const check = () => {
+      if (counted) return;
+      try {
+        const doc = iframe.contentDocument || iframe.contentWindow.document;
+        if (!doc || !doc.documentElement) return;
+        const text = (doc.body ? (doc.body.innerText || doc.body.textContent) : "") + " " + doc.documentElement.textContent;
+        const upperText = text.toUpperCase();
+        if (upperText.includes('PASS')) {
+          counted = true;
+          passCount++;
+          updateStats();
+          return true;
+        } else if (upperText.includes('FAIL')) {
+          counted = true;
+          failCount++;
+          updateStats();
+          return true;
+        }
+      } catch (e) {
+        // Continue polling if there's an error (e.g. document not ready)
+      }
+      return false;
+    };
+
+    iframe.addEventListener('load', () => {
+      if (check()) return;
+      const interval = setInterval(() => {
+        if (check()) clearInterval(interval);
+      }, 100);
+      setTimeout(() => {
+        clearInterval(interval);
+        if (!counted) {
+          counted = true;
+          failCount++;
+          updateStats();
+        }
+      }, 10000);
+    });
+    iframe.src = url;
   }
   function assert(cond,msg) {
     msg = msg || "Error";
@@ -82,7 +138,6 @@
   function runTest(testCase, mode) {
     const iframe = document.createElement('iframe');
     let url = testCase.html ? testCase.html : testCase.xml;
-    iframe.src = url;
     return {iframe, url};
   }
 
@@ -96,6 +151,9 @@
   }
   const modeElement = document.getElementById('mode')
   function runTests(testCases) {
+    passCount = 0;
+    failCount = 0;
+    updateStats();
     document.getElementById('results').querySelector('tbody').innerHTML = '';
     const mode = modeElement.value;
     for (const testCase of testCases) {
