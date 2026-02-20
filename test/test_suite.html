@@ -45,6 +45,12 @@
     <tbody>
     </tbody>
   </table>
+  <p style="font-size: 0.7em; color: #666;">
+    Direct test links:
+    <a href="?autorun=native">native</a>,
+    <a href="?autorun=source">source</a>,
+    <a href="?autorun=minified">minified</a>
+  </p>
 </body>
 </html>
 
@@ -130,4 +136,11 @@
   }
 
   document.getElementById('go').addEventListener('click', loadTestsAndRun);
+
+  const urlParams = new URLSearchParams(window.location.search);
+  const autorun = urlParams.get('autorun');
+  if (autorun === 'source' || autorun === 'native' || autorun === 'minified') {
+    modeElement.value = autorun;
+    loadTestsAndRun();
+  }
 </script>
