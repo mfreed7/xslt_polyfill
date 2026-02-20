@@ -18,6 +18,16 @@ const UTILITIES = `
         }).join('')
         return htmlString.replace(/\\s/g,'');
     }
+    function setResult(passed, message) {
+        const target = document.getElementById("target");
+        if (passed) {
+            target.textContent = 'PASS';
+            target.style.color = 'green';
+        } else {
+            target.textContent = 'FAIL' + (message ? ': ' + message : '');
+            target.style.color = 'red';
+        }
+    }
 `;
 
 const testCases = [
@@ -126,15 +136,10 @@ const testCases = [
                 <xsl:output method="html"/>
                 <xsl:template match="/"> </xsl:template>
                 </xsl:stylesheet>\`;
-            const parser = new window.DOMParser();
-            const xmlDoc = parser.parseFromString(xml, "application/xml");
-            const xslDoc = parser.parseFromString(xsl, "application/xml");
-            const xsltProcessor = new window.XSLTProcessor();
-            xsltProcessor.importStylesheet(xslDoc);
+            ${UTILITIES}
+            const {xsltProcessor,xmlDoc} = initProcessor(xml,xsl);
             const fragment = xsltProcessor.transformToFragment(xmlDoc, document);
-            if (fragment instanceof DocumentFragment) {
-                document.getElementById("target").textContent = 'PASS';
-            }
+            setResult(fragment instanceof DocumentFragment);
         };
         </script>
         </body>`,
@@ -155,6 +160,7 @@ const testCases = [
                     <root>PASS</root>
                 </xsl:template>
                 </xsl:stylesheet>\`;
+            ${UTILITIES}
             const parser = new window.DOMParser();
             const xslDoc = parser.parseFromString(xsl, "application/xml");
             const xsltProcessor = new window.XSLTProcessor();
@@ -165,9 +171,7 @@ const testCases = [
             docResult = xsltProcessor.transformToDocument(xmlDoc);
             fragResult = xsltProcessor.transformToFragment(xmlDoc, document);
            
-            if (docResult === null && fragResult === null) {
-                document.getElementById("target").textContent = 'PASS';
-            }
+            setResult(docResult === null && fragResult === null);
         };
         </script>
         </body>`,
@@ -193,11 +197,7 @@ const testCases = [
             ${UTILITIES}
             const {xsltProcessor,xmlDoc} = initProcessor(xml,xsl);
             const fragment = toFlatString(xsltProcessor.transformToFragment(xmlDoc, document));
-            if (fragment !== '<div>node1</div><div>node2</div>') {
-                document.getElementById("target").textContent = 'FAIL';
-                return;
-            }
-            document.getElementById("target").textContent = 'PASS';
+            setResult(fragment === '<div>node1</div><div>node2</div>');
         };
         </script>`,
   },
@@ -224,16 +224,9 @@ const testCases = [
             ${UTILITIES}
             const {xsltProcessor,xmlDoc} = initProcessor(xml,xsl);
             const fragment = toFlatString(xsltProcessor.transformToFragment(xmlDoc, document));
-            if (fragment !== '<title>PASS</title><div>PASS</div>') {
-                document.getElementById("target").textContent = 'FAIL';
-                return;
-            }
             const doc = toFlatString(xsltProcessor.transformToDocument(xmlDoc));
-            if (doc !== '<html><head><title>PASS</title></head><body><div>PASS</div></body></html>') {
-                document.getElementById("target").textContent = 'FAIL';
-                return;
-            }
-            document.getElementById("target").textContent = 'PASS';
+            setResult(fragment === '<title>PASS</title><div>PASS</div>' &&
+                      doc === '<html><head><title>PASS</title></head><body><div>PASS</div></body></html>');
         };
         </script>`,
   },
@@ -260,16 +253,9 @@ const testCases = [
             ${UTILITIES}
             const {xsltProcessor,xmlDoc} = initProcessor(xml,xsl);
             const fragment = toFlatString(xsltProcessor.transformToFragment(xmlDoc, document));
-            if (fragment !== '<html><head><title>PASS</title></head><body><div>PASS</div></body></html>') {
-                document.getElementById("target").textContent = 'FAIL';
-                return;
-            }
             const doc = toFlatString(xsltProcessor.transformToDocument(xmlDoc));
-            if (doc !== '<html><head><title>PASS</title></head><body><div>PASS</div></body></html>') {
-                document.getElementById("target").textContent = 'FAIL';
-                return;
-            }
-            document.getElementById("target").textContent = 'PASS';
+            setResult(fragment === '<html><head><title>PASS</title></head><body><div>PASS</div></body></html>' &&
+                      doc === '<html><head><title>PASS</title></head><body><div>PASS</div></body></html>');
         };
         </script>`,
   },
@@ -296,16 +282,9 @@ const testCases = [
             ${UTILITIES}
             const {xsltProcessor,xmlDoc} = initProcessor(xml,xsl);
             const fragment = toFlatString(xsltProcessor.transformToFragment(xmlDoc, document));
-            if (fragment !== 'PASSPASS') {
-                document.getElementById("target").textContent = 'FAIL';
-                return;
-            }
             const doc = toFlatString(xsltProcessor.transformToDocument(xmlDoc));
-            if (doc !== '<htmlxmlns="http://www.w3.org/1999/xhtml"><head><title></title></head><body><pre>PASSPASS</pre></body></html>') {
-                document.getElementById("target").textContent = 'FAIL';
-                return;
-            }
-            document.getElementById("target").textContent = 'PASS';
+            setResult(fragment === 'PASSPASS' &&
+                      doc === '<htmlxmlns="http://www.w3.org/1999/xhtml"><head><title></title></head><body><pre>PASSPASS</pre></body></html>');
         };
         </script>`,
   },
@@ -331,16 +310,9 @@ const testCases = [
             ${UTILITIES}
             const {xsltProcessor,xmlDoc} = initProcessor(xml,xsl);
             const fragment = toFlatString(xsltProcessor.transformToFragment(xmlDoc, document));
-            if (fragment !== '<title>PASS</title><div>PASS</div>') {
-                document.getElementById("target").textContent = 'FAIL';
-                return;
-            }
             const doc = toFlatString(xsltProcessor.transformToDocument(xmlDoc));
-            if (doc !== '<html><head><title>PASS</title></head><body><div>PASS</div></body></html>') {
-                document.getElementById("target").textContent = 'FAIL';
-                return;
-            }
-            document.getElementById("target").textContent = 'PASS';
+            setResult(fragment === '<title>PASS</title><div>PASS</div>' &&
+                      doc === '<html><head><title>PASS</title></head><body><div>PASS</div></body></html>');
         };
         </script>`,
   },
@@ -365,16 +337,9 @@ const testCases = [
             ${UTILITIES}
             const {xsltProcessor,xmlDoc} = initProcessor(xml,xsl);
             const fragment = toFlatString(xsltProcessor.transformToFragment(xmlDoc, document));
-            if (fragment !== '<root><div>PASS</div></root>') {
-                document.getElementById("target").textContent = 'FAIL';
-                return;
-            }
             const doc = toFlatString(xsltProcessor.transformToDocument(xmlDoc));
-            if (doc !== '<root><div>PASS</div></root>') {
-                document.getElementById("target").textContent = 'FAIL';
-                return;
-            }
-            document.getElementById("target").textContent = 'PASS';
+            setResult(fragment === '<root><div>PASS</div></root>' &&
+                      doc === '<root><div>PASS</div></root>');
         };
         </script>`,
   },
@@ -402,6 +367,7 @@ const testCases = [
                 </html>
                 </xsl:template>
                 </xsl:stylesheet>\`;
+            ${UTILITIES}
             const parser = new window.DOMParser();
             const xmlDoc = parser.parseFromString(xml, "application/xml");
             const xslDoc = parser.parseFromString(xsl, "application/xml");
@@ -411,15 +377,12 @@ const testCases = [
             const html = newDocument.firstElementChild;
             const head = html?.firstElementChild;
             const body = head?.nextElementSibling;
-            if (html instanceof HTMLHtmlElement &&
+            const passed = html instanceof HTMLHtmlElement &&
                 head instanceof HTMLHeadElement &&
                 body instanceof HTMLBodyElement &&
                 head?.children?.length === 2 &&
-                body?.children?.length === 1) {
-                document.getElementById("target").textContent = 'PASS';
-            } else {
-                document.getElementById("target").textContent = 'FAIL';
-            }
+                body?.children?.length === 1;
+            setResult(passed);
         };
         </script>
         </body>`,
@@ -459,6 +422,7 @@ const testCases = [
                 </xsl:template>
             </xsl:stylesheet>\`;
 
+            ${UTILITIES}
             const parser = new window.DOMParser();
             const xmlDoc = parser.parseFromString(xml, "application/xml");
             const xslDoc = parser.parseFromString(xsl, "application/xml");
@@ -470,12 +434,9 @@ const testCases = [
             const html = newDocument.firstElementChild;
             const body = html?.firstElementChild?.nextElementSibling;
             const pre = body?.firstElementChild;
-            if (pre instanceof HTMLPreElement &&
-                pre.textContent === 'Text') {
-                document.getElementById("target").textContent = 'PASS';
-            } else {
-                document.getElementById("target").textContent = 'FAIL';
-            }
+            const passed = pre instanceof HTMLPreElement &&
+                pre.textContent === 'Text';
+            setResult(passed);
         };
         </script>
         </body>`,
@@ -554,7 +515,7 @@ const testCases = [
           const fragment = xsltProcessor.transformToFragment(xmlDoc, document);
           const firstDiv = fragment.querySelector('div');
           const divIsXHTMLNamespace = firstDiv && firstDiv.namespaceURI === 'http://www.w3.org/1999/xhtml';
-          document.getElementById("target").textContent = divIsXHTMLNamespace ? 'PASS' : 'FAIL';
+          setResult(divIsXHTMLNamespace);
         };
         </script>
         </body>`,
@@ -595,7 +556,7 @@ const testCases = [
             const result = fragment.textContent.trim();
             
             if (result === "") {
-                document.getElementById("target").textContent = 'FAIL: result is empty string';
+                setResult(false, 'result is empty string');
                 return;
             }
 
@@ -617,11 +578,8 @@ const testCases = [
             const isCaseInsensitiveish = Math.abs(posA - posa) === 1 && Math.abs(posZ - posz) === 1;
             const isAccentsNearBase = posS !== -1 && posŠ !== -1 && Math.abs(posS - posŠ) === 1;
             
-            if (isCaseInsensitiveish && isAccentsNearBase) {
-                document.getElementById("target").textContent = 'PASS';
-            } else {
-                document.getElementById("target").textContent = 'FAIL: "' + result + '" (A:'+posA+', a:'+posa+', S:'+posS+', Š:'+posŠ+', Z:'+posZ+', z:'+posz+')';
-            }
+            const message = '"' + result + '" (A:'+posA+', a:'+posa+', S:'+posS+', Š:'+posŠ+', Z:'+posZ+', z:'+posz+')';
+            setResult(isCaseInsensitiveish && isAccentsNearBase, message);
         };
         </script>
         </body>`,
