@@ -1,65 +1,64 @@
-<!DOCTYPE html>
+<!doctype html>
 <html>
-<head>
-  <title>XSLT Polyfill Test Runner</title>
-<style>
-  body {
-    font-family: sans-serif;
-  }
-  table {
-    border-collapse: collapse;
-    width: auto;
-  }
-  th, td {
-    border: 1px solid #ccc;
-    padding: 4px;
-    text-align: left;
-  }
-  th {
-    background-color: #f2f2f2;
-  }
-  iframe {
-    height: 2.2em;
-    width: 100px;
-    border: 0;
-  }
-</style>
-</head>
-<body>
-  <h1>XSLT Polyfill Test Runner</h1>
-  <div>
-    <select id="mode">
-      <option value="native">Run with Native Browser Feature</option>
-      <option value="source">Run with Polyfill (Source)</option>
-      <option value="minified">Run with Polyfill (Minified)</option>
-    </select>
-    <button id="go">Go</button>
-  </div>
-  <table id="results">
-    <thead>
-      <tr>
-        <th>Test Case</th>
-        <th>Output</th>
-        <th>Time (ms)</th>
-      </tr>
-    </thead>
-    <tbody>
-    </tbody>
-    <tfoot>
-      <tr id="stats-row" style="font-weight: bold; background-color: #f2f2f2;">
-        <td id="stats-cell">0 PASS, 0 FAIL</td>
-        <td></td>
-        <td></td>
-      </tr>
-    </tfoot>
-  </table>
-  <p style="font-size: 0.7em; color: #666;">
-    Direct test links:
-    <a href="?autorun=native">native</a>,
-    <a href="?autorun=source">source</a>,
-    <a href="?autorun=minified">minified</a>
-  </p>
-</body>
+  <head>
+    <title>XSLT Polyfill Test Runner</title>
+    <style>
+      body {
+        font-family: sans-serif;
+      }
+      table {
+        border-collapse: collapse;
+        width: auto;
+      }
+      th,
+      td {
+        border: 1px solid #ccc;
+        padding: 4px;
+        text-align: left;
+      }
+      th {
+        background-color: #f2f2f2;
+      }
+      iframe {
+        height: 2.2em;
+        width: 100px;
+        border: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>XSLT Polyfill Test Runner</h1>
+    <div>
+      <select id="mode">
+        <option value="native">Run with Native Browser Feature</option>
+        <option value="source">Run with Polyfill (Source)</option>
+        <option value="minified">Run with Polyfill (Minified)</option>
+      </select>
+      <button id="go">Go</button>
+    </div>
+    <table id="results">
+      <thead>
+        <tr>
+          <th>Test Case</th>
+          <th>Output</th>
+          <th>Time (ms)</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+      <tfoot>
+        <tr id="stats-row" style="font-weight: bold; background-color: #f2f2f2">
+          <td id="stats-cell">0 PASS, 0 FAIL</td>
+          <td></td>
+          <td></td>
+        </tr>
+      </tfoot>
+    </table>
+    <p style="font-size: 0.7em; color: #666">
+      Direct test links:
+      <a href="?autorun=native">native</a>, <a href="?autorun=source">source</a>,
+      <a href="?autorun=minified">minified</a>
+    </p>
+  </body>
 </html>
 
 <script>
@@ -90,7 +89,8 @@
     link.href = url;
     link.target = '_blank';
     link.title = 'Open test file in new tab';
-    link.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle;"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>';
+    link.innerHTML =
+      '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle;"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>';
     nameCell.appendChild(link);
     row.appendChild(nameCell);
     const outputCell = document.createElement('td');
@@ -108,7 +108,7 @@
         const doc = iframe.contentDocument || iframe.contentWindow.document;
         if (!doc || !doc.documentElement) return;
         const rootNode = doc.body || doc.documentElement;
-        const text = (rootNode.innerText !== undefined) ? rootNode.innerText : (rootNode.textContent || "");
+        const text = rootNode.innerText !== undefined ? rootNode.innerText : rootNode.textContent || '';
         const upperText = text.toUpperCase();
         if (upperText.includes('PASS')) {
           const duration = performance.now() - startTime;
@@ -146,8 +146,8 @@
     });
     iframe.src = url;
   }
-  function assert(cond,msg) {
-    msg = msg || "Error";
+  function assert(cond, msg) {
+    msg = msg || 'Error';
     if (!cond) {
       document.documentElement.innerHTML = msg;
       throw new Error(msg);
@@ -157,10 +157,10 @@
   function runTest(testCase, mode) {
     const iframe = document.createElement('iframe');
     let url = testCase.html ? testCase.html : testCase.xml;
-    return {iframe, url};
+    return { iframe, url };
   }
 
-  let nativeSupported = ('XSLTProcessor' in window) && window.XSLTProcessor.toString().includes('native code');
+  let nativeSupported = 'XSLTProcessor' in window && window.XSLTProcessor.toString().includes('native code');
   if (nativeSupported) {
     try {
       new XSLTProcessor();
@@ -168,7 +168,7 @@
       nativeSupported = false;
     }
   }
-  const modeElement = document.getElementById('mode')
+  const modeElement = document.getElementById('mode');
   function runTests(testCases) {
     passCount = 0;
     failCount = 0;
@@ -177,37 +177,37 @@
     document.getElementById('results').querySelector('tbody').innerHTML = '';
     const mode = modeElement.value;
     for (const testCase of testCases) {
-      const {iframe,url} = runTest(testCase, mode);
+      const { iframe, url } = runTest(testCase, mode);
       addTestResult(testCase.name, iframe, url);
     }
   }
 
   if (nativeSupported) {
     modeElement.selectedIndex = 0; // Native by default
-    const msg = " (Native feature ENABLED!)";
+    const msg = ' (Native feature ENABLED!)';
     modeElement.options[1].textContent += msg;
     modeElement.options[2].textContent += msg;
   } else {
     modeElement.selectedIndex = 2; // Minified by default
-    modeElement.options[0].textContent += " (NOT supported!)";
+    modeElement.options[0].textContent += ' (NOT supported!)';
   }
 
   async function loadTestsAndRun() {
     const response = await fetch('generated/file_list.json');
     const allTestCases = await response.json();
     const mode = modeElement.value;
-    const testCases = allTestCases.map(tc => {
-        const testCase = { name: tc.name };
-        if (tc.xml) {
-            testCase.xml = tc.xml.replace('{{MODE}}', mode);
-        }
-        if (tc.xsl) {
-            testCase.xsl = tc.xsl.replace('{{MODE}}', mode);
-        }
-        if (tc.html) {
-            testCase.html = tc.html.replace('{{MODE}}', mode);
-        }
-        return testCase;
+    const testCases = allTestCases.map((tc) => {
+      const testCase = { name: tc.name };
+      if (tc.xml) {
+        testCase.xml = tc.xml.replace('{{MODE}}', mode);
+      }
+      if (tc.xsl) {
+        testCase.xsl = tc.xsl.replace('{{MODE}}', mode);
+      }
+      if (tc.html) {
+        testCase.html = tc.html.replace('{{MODE}}', mode);
+      }
+      return testCase;
     });
 
     runTests(testCases);

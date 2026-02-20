@@ -12,23 +12,23 @@ const puppeteer = require('puppeteer');
   }
 
   // 1. Launch headless browser
-  const browser = await puppeteer.launch({ 
-    headless: "new",
-    args: ['--disable-web-security']
+  const browser = await puppeteer.launch({
+    headless: 'new',
+    args: ['--disable-web-security'],
   });
-  
+
   const page = await browser.newPage();
 
   try {
     console.log(`Loading test suite: ${targetUrl} ...`);
-    
+
     // 2. Wait for the network to be completely idle
     await page.goto(targetUrl, { waitUntil: 'networkidle0' });
 
     // 3. Wait for iframes to load/error, then extract and concatenate their text
     const fullTextOutput = await page.evaluate(async () => {
       // Wait for at least one iframe to be added to the DOM
-      const iframes = await new Promise(resolve => {
+      const iframes = await new Promise((resolve) => {
         const check = () => {
           const found = Array.from(document.querySelectorAll('iframe'));
           if (found.length > 0) resolve(found);
@@ -36,13 +36,16 @@ const puppeteer = require('puppeteer');
         };
         check();
       });
-      
+
       // Wait for all tests to finish (reaching PASS or FAIL state)
       // These variables are global in test_suite.html
-      await new Promise(resolve => {
+      await new Promise((resolve) => {
         const check = () => {
-          if (typeof passCount !== 'undefined' && typeof failCount !== 'undefined' && 
-              (passCount + failCount) === iframes.length) {
+          if (
+            typeof passCount !== 'undefined' &&
+            typeof failCount !== 'undefined' &&
+            passCount + failCount === iframes.length
+          ) {
             resolve();
           } else {
             setTimeout(check, 100);
@@ -57,7 +60,7 @@ const puppeteer = require('puppeteer');
         if (node.nodeType === Node.TEXT_NODE) {
           return node.textContent.trim();
         }
-        
+
         // Skip anything that isn't a standard element
         if (node.nodeType !== Node.ELEMENT_NODE) {
           return '';
@@ -73,7 +76,7 @@ const puppeteer = require('puppeteer');
           try {
             const doc = node.contentDocument || node.contentWindow.document;
             if (!doc) return '';
-            
+
             // XHTML/XML docs might not have a .body, fallback to documentElement
             const rootNode = doc.body || doc.documentElement;
             if (!rootNode) return '';
@@ -84,7 +87,7 @@ const puppeteer = require('puppeteer');
           }
         }
 
-        // If this branch of the DOM doesn't contain any iframes, 
+        // If this branch of the DOM doesn't contain any iframes,
         // we can safely use the native innerText to get clean, formatted text
         if (!node.querySelector('iframe')) {
           return node.innerText ? node.innerText.trim() : '';
@@ -101,7 +104,9 @@ const puppeteer = require('puppeteer');
 
         // Formatting: Join children of block-level container elements with newlines.
         // TR is deliberately omitted so its children (columns/TDs) join inline with a space.
-        const isBlockLevel = ['TABLE', 'TBODY', 'THEAD', 'DIV', 'P', 'UL', 'SECTION', 'MAIN', 'BODY'].includes(node.tagName);
+        const isBlockLevel = ['TABLE', 'TBODY', 'THEAD', 'DIV', 'P', 'UL', 'SECTION', 'MAIN', 'BODY'].includes(
+          node.tagName,
+        );
         return parts.join(isBlockLevel ? '\n' : ' ');
       }
 
@@ -115,7 +120,6 @@ const puppeteer = require('puppeteer');
 
     // 4. Print the final unified output
     console.log(fullTextOutput.trim());
-
   } catch (error) {
     console.error('Fatal Error running tests:', error);
     process.exitCode = 1;
