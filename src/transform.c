@@ -371,12 +371,15 @@ static xmlDocPtr docLoader(const xmlChar *URI, xmlDictPtr dict, int options,
 
   // Check if this is the stylesheet itself (for document('')).
   // This avoids a redundant fetch and potential Asyncify suspension issues.
-  xsltTransformContextPtr tctxt = (xsltTransformContextPtr)ctxt;
-  if (tctxt && tctxt->style && tctxt->style->doc) {
-    if (URI == NULL || URI[0] == '\0' ||
-        (tctxt->style->doc->URL &&
-         xmlStrEqual(URI, (const xmlChar *)tctxt->style->doc->URL))) {
-      return xmlCopyDoc(tctxt->style->doc, 1);
+  // ctxt is only a transform context for XSLT_LOAD_DOCUMENT.
+  if (type == XSLT_LOAD_DOCUMENT) {
+    xsltTransformContextPtr tctxt = (xsltTransformContextPtr)ctxt;
+    if (tctxt && tctxt->style && tctxt->style->doc) {
+      if (URI == NULL || URI[0] == '\0' ||
+          (tctxt->style->doc->URL &&
+           xmlStrEqual(URI, (const xmlChar *)tctxt->style->doc->URL))) {
+        return xmlCopyDoc(tctxt->style->doc, 1);
+      }
     }
   }
 

@@ -64,6 +64,7 @@ emcc ${EMCC_OPT_LEVEL} ${EMCC_DEBUG_FLAGS} \
   -s EXPORT_NAME=createXSLTTransformModule \
   -s EXPORTED_FUNCTIONS=_transform,_malloc,_free,Asyncify \
   -s EXPORTED_RUNTIME_METHODS=cwrap,UTF8ToString,wasmMemory,Asyncify,stringToNewUTF8 \
+  -s WASM_ASYNC_COMPILATION=0 \
   -s ASYNCIFY \
   ${EMCC_ASYNCIFY_DEBUG} \
   -s ASYNCIFY_IMPORTS=fetch_and_load_document \

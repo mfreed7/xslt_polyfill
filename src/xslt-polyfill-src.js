@@ -38,6 +38,28 @@
     // The polyfill
     const promiseName = 'xsltPolyfillReady';
 
+    // Initialize the Wasm module as early as possible.
+    let WasmModule = null;
+    let wasm_transform = null;
+    let wasm_transform_async = null;
+    let wasm_free = null;
+
+    createXSLTTransformModule()
+      .then((Module) => {
+        WasmModule = Module;
+        const args = ['transform', 'number', ['number', 'number', 'number', 'number', 'number', 'number', 'number']];
+        wasm_transform = Module.cwrap(...args, { async: false });
+        wasm_transform_async = Module.cwrap(...args, { async: true });
+        wasm_free = Module._free;
+
+        // Tell people we're ready.
+        polyfillReadyPromiseResolve();
+      })
+      .catch((err) => {
+        console.error('Error loading XSLT Wasm module:', err);
+        polyfillReadyPromiseReject(err);
+      });
+
     async function loadDoc(fn, cache) {
       const res = await fetch(fn, { cache: cache });
       if (!res.ok) {
@@ -168,6 +190,16 @@
         return textDecoder.decode(heapu8.subarray(ptr, end));
       };
 
+      const cleanup = () => {
+        // Clean up all allocated memory to prevent memory leaks in the Wasm heap.
+        if (xmlPtr) wasm_free(xmlPtr);
+        if (xsltPtr) wasm_free(xsltPtr);
+        if (xsltUrlPtr) wasm_free(xsltUrlPtr);
+        if (mimeTypePtr) wasm_free(mimeTypePtr);
+        paramStringPtrs.forEach((ptr) => wasm_free(ptr));
+        if (paramsPtr) wasm_free(paramsPtr);
+      };
+
       try {
         // 1. Prepare parameters from the Map into a flat array.
         // libxslt expects string values to be XPath expressions, so simple strings
@@ -214,7 +246,8 @@
         new Uint8Array(WasmModule.wasmMemory.buffer, mimeTypePtr, 32).fill(0);
 
         // 4. Call the C function with pointers to the data in Wasm memory.
-        const resultPtr_or_Promise = wasm_transform(
+        const wasm_fn = allowAsync ? wasm_transform_async : wasm_transform;
+        const resultPtr_or_Promise = wasm_fn(
           xmlPtr,
           xmlBytes.byteLength,
           xsltPtr,
@@ -223,6 +256,13 @@
           xsltUrlPtr,
           mimeTypePtr,
         );
+
+        if (!allowAsync && WasmModule.Asyncify && WasmModule.Asyncify.state === 1 /* Suspending */) {
+          throw new Error(
+            "This XSLT transformation contains includes or document() calls. These aren't supported for synchronous XSLTProcessor methods.",
+          );
+        }
+
         if (!resultPtr_or_Promise) {
           throw new Error(`XSLT Transformation failed. See console for details.`);
         }
@@ -249,28 +289,20 @@
         };
 
         if (resultPtr_or_Promise instanceof Promise) {
-          if (!allowAsync) {
-            resultPtr_or_Promise.then((resultPtr) => {
-              finishProcessing(resultPtr);
-              showError(
-                "This XSLT transformation contains includes. These aren't supported for synchronous XSLTProcessor methods.",
-              );
-            });
-            return { content: '', mimeType: 'application/xml' };
-          }
           // Return a Promise that resolves to the finished object
-          return resultPtr_or_Promise.then((resultPtr) => finishProcessing(resultPtr));
+          return resultPtr_or_Promise.then((resultPtr) => {
+            const res = finishProcessing(resultPtr);
+            cleanup();
+            return res;
+          });
         }
         // Not a promise - just return the finished object.
-        return finishProcessing(resultPtr_or_Promise);
-      } finally {
-        // 7. Clean up all allocated memory to prevent memory leaks in the Wasm heap.
-        if (xmlPtr) wasm_free(xmlPtr);
-        if (xsltPtr) wasm_free(xsltPtr);
-        if (xsltUrlPtr) wasm_free(xsltUrlPtr);
-        if (mimeTypePtr) wasm_free(mimeTypePtr);
-        paramStringPtrs.forEach((ptr) => wasm_free(ptr));
-        if (paramsPtr) wasm_free(paramsPtr);
+        const res = finishProcessing(resultPtr_or_Promise);
+        cleanup();
+        return res;
+      } catch (e) {
+        cleanup();
+        throw e;
       }
     }
 
@@ -399,30 +431,6 @@
 
     window.XSLTProcessor = XSLTProcessor;
     window.xsltPolyfillReady = xsltPolyfillReady;
-
-    // Finally, initialize the Wasm module.
-    let WasmModule = null;
-    let wasm_transform = null;
-    let wasm_free = null;
-
-    createXSLTTransformModule()
-      .then((Module) => {
-        WasmModule = Module;
-        wasm_transform = Module.cwrap(
-          'transform',
-          'number',
-          ['number', 'number', 'number', 'number', 'number', 'number', 'number'],
-          { async: false },
-        );
-        wasm_free = Module._free;
-
-        // Tell people we're ready.
-        polyfillReadyPromiseResolve();
-      })
-      .catch((err) => {
-        console.error('Error loading XSLT Wasm module:', err);
-        polyfillReadyPromiseReject(err);
-      });
 
     function absoluteUrl(url) {
       return new URL(url, window.location.href).href;

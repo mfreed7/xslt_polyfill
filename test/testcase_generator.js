@@ -658,10 +658,10 @@ const testCases = [
     get xsl() {
       // Use a large data URI to simulate a slow-loading external script.
       // This ensures the load event won't fire "accidentally" fast.
-      const padding = " ".repeat(1024 * 1024 * 2); // 2MB padding
-      const scriptContent = "window.externalScriptLoaded = true; /* " + padding + " */";
-      const scriptSrc = "data:text/javascript;base64," + Buffer.from(scriptContent).toString('base64');
-      
+      const padding = ' '.repeat(1024 * 1024 * 2); // 2MB padding
+      const scriptContent = 'window.externalScriptLoaded = true; /* ' + padding + ' */';
+      const scriptSrc = 'data:text/javascript;base64,' + Buffer.from(scriptContent).toString('base64');
+
       return `<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
         <xsl:output method="html"/>
         <xsl:template match="/">
@@ -687,7 +687,7 @@ const testCases = [
             </body>
         </xsl:template>
     </xsl:stylesheet>`;
-    }
+    },
   },
   {
     name: 'Import Attribute Merge',
@@ -707,6 +707,31 @@ const testCases = [
             </div>
         </xsl:template>
         </xsl:stylesheet>`,
+  },
+  {
+    name: 'External document() call',
+    xml: `<?xml version="1.0"?>
+        <?xml-stylesheet type="text/xsl" href="{{XSL_HREF}}"?>
+        <page>
+            {{SCRIPT_INJECTION_LOCATION}}
+            <message>FAIL!!!</message>
+        </page>
+    `,
+    get xsl() {
+      const xmlContent = '<root>PASS</root>';
+      const base64Content = Buffer.from(xmlContent).toString('base64');
+      const dataUri = `data:text/xml;base64,${base64Content}`;
+      return `<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+        <xsl:output method="html"/>
+        <!-- Use a base64 data URI to ensure valid URI syntax for libxml2 while triggering Asyncify suspension -->
+        <xsl:variable name="external" select="document('${dataUri}')"/>
+        <xsl:template match="/">
+            <div id="target" style="color:green">
+                <xsl:value-of select="$external/root"/>
+            </div>
+        </xsl:template>
+        </xsl:stylesheet>`;
+    },
   },
 ];
 
