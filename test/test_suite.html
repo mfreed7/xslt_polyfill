@@ -40,6 +40,7 @@
       <tr>
         <th>Test Case</th>
         <th>Output</th>
+        <th>Time (ms)</th>
       </tr>
     </thead>
     <tbody>
@@ -47,6 +48,7 @@
     <tfoot>
       <tr id="stats-row" style="font-weight: bold; background-color: #f2f2f2;">
         <td id="stats-cell">0 PASS, 0 FAIL</td>
+        <td></td>
         <td></td>
       </tr>
     </tfoot>
@@ -63,10 +65,20 @@
 <script>
   let passCount = 0;
   let failCount = 0;
+  let passDurations = [];
   function updateStats() {
     const statsCell = document.getElementById('stats-cell');
     if (statsCell) {
-      statsCell.textContent = `${passCount} PASS, ${failCount} FAIL`;
+      let stats = `${passCount} PASS, ${failCount} FAIL`;
+      if (passDurations.length > 0) {
+        const sum = passDurations.reduce((a, b) => a + b, 0);
+        const avg = sum / passDurations.length;
+        const sorted = [...passDurations].sort((a, b) => a - b);
+        const mid = Math.floor(sorted.length / 2);
+        const median = sorted.length % 2 !== 0 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+        stats += ` (Avg: ${avg.toFixed(0)}ms, Median: ${median.toFixed(0)}ms)`;
+      }
+      statsCell.textContent = stats;
     }
   }
 
@@ -84,6 +96,9 @@
     const outputCell = document.createElement('td');
     outputCell.appendChild(iframe);
     row.appendChild(outputCell);
+    const timeCell = document.createElement('td');
+    row.appendChild(timeCell);
+    const startTime = performance.now();
     document.getElementById('results').querySelector('tbody').appendChild(row);
 
     let counted = false;
@@ -95,6 +110,9 @@
         const text = (doc.body ? (doc.body.innerText || doc.body.textContent) : "") + " " + doc.documentElement.textContent;
         const upperText = text.toUpperCase();
         if (upperText.includes('PASS')) {
+          const duration = performance.now() - startTime;
+          timeCell.textContent = duration.toFixed(0);
+          passDurations.push(duration);
           counted = true;
           passCount++;
           updateStats();
@@ -115,7 +133,7 @@
       if (check()) return;
       const interval = setInterval(() => {
         if (check()) clearInterval(interval);
-      }, 100);
+      }, 50);
       setTimeout(() => {
         clearInterval(interval);
         if (!counted) {
@@ -153,6 +171,7 @@
   function runTests(testCases) {
     passCount = 0;
     failCount = 0;
+    passDurations = [];
     updateStats();
     document.getElementById('results').querySelector('tbody').innerHTML = '';
     const mode = modeElement.value;
