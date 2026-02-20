@@ -1,6 +1,6 @@
 {
   "name": "xslt-polyfill",
-  "version": "1.0.17",
+  "version": "1.0.18",
   "description": "A polyfill for browser-based XSLTProcessor and friends",
   "keywords": "XSLT, XML, XSLTProcessor",
   "homepage": "https://github.com/mfreed7/xslt_polyfill",
