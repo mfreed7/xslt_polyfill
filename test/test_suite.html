@@ -28,6 +28,10 @@
   </head>
   <body>
     <h1>XSLT Polyfill Test Runner</h1>
+    <div id="warning" style="display: none; background-color: #fff3cd; color: #856404; border: 1px solid #ffeeba; padding: 12px; margin-bottom: 20px; border-radius: 4px; font-family: sans-serif;">
+      <strong>Test Files Missing:</strong> This test suite requires pre-generated test cases.
+      Please run <code>node test/testcase_generator.js</code> in the project root to generate them.
+    </div>
     <div>
       <select id="mode">
         <option value="native">Run with Native Browser Feature</option>
@@ -193,7 +197,15 @@
   }
 
   async function loadTestsAndRun() {
-    const response = await fetch('generated/file_list.json');
+    let response;
+    try {
+      response = await fetch('generated/file_list.json');
+      if (!response.ok) throw new Error();
+    } catch (e) {
+      document.getElementById('warning').style.display = 'block';
+      return;
+    }
+    document.getElementById('warning').style.display = 'none';
     const allTestCases = await response.json();
     const mode = modeElement.value;
     const testCases = allTestCases.map((tc) => {
@@ -221,4 +233,14 @@
     modeElement.value = autorun;
     loadTestsAndRun();
   }
+
+  // Initial check to see if files are present
+  (async function() {
+    try {
+      const response = await fetch('generated/file_list.json');
+      if (!response.ok) document.getElementById('warning').style.display = 'block';
+    } catch (e) {
+      document.getElementById('warning').style.display = 'block';
+    }
+  })();
 </script>
