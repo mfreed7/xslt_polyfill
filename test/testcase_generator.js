@@ -701,6 +701,35 @@ const testCases = [
         </xsl:stylesheet>`;
     },
   },
+  {
+    name: 'Uppercase Attributes',
+    html: `
+        <!DOCTYPE html>
+        <body>
+        {{SCRIPT_INJECTION_LOCATION}}
+        <div id="target" style="color:red">INIT</div>
+        <script>
+        window.onload = () => {
+            const xml = \`<?xml version="1.0" encoding="utf-8"?>
+                <page><message>Hello World.</message></page>\`;
+            const xsl = \`<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+                <xsl:template match="/page/message">
+                  <root>
+                    <a data-name="some name" dataName="uppercase attribute">click me</a>
+                  </root>
+                </xsl:template>
+                </xsl:stylesheet>\`;
+            ${UTILITIES}
+            const {xsltProcessor,xmlDoc} = initProcessor(xml,xsl);
+            const fragment = xsltProcessor.transformToFragment(xmlDoc, document);
+            const a = fragment.querySelector('a');
+            const dataNameUpper = a.getAttribute('dataName');
+            const dataNameLower = a.getAttribute('data-name');
+            setResult(dataNameUpper === 'uppercase attribute' && dataNameLower === 'some name', 'upper: ' + dataNameUpper + ', lower: ' + dataNameLower);
+        };
+        </script>
+        </body>`,
+  },
 ];
 
 const fs = require('fs');

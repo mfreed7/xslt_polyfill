@@ -322,6 +322,26 @@
       return source && source.nodeType === Node.DOCUMENT_NODE && !source.documentElement;
     }
 
+    function lowercaseHtmlAttributes(root) {
+      if (!root) return;
+      const elements = root.querySelectorAll('*');
+      for (let i = 0; i < elements.length; i++) {
+        const el = elements[i];
+        if (el.namespaceURI === 'http://www.w3.org/1999/xhtml') {
+          const attrs = el.getAttributeNames();
+          for (let j = 0; j < attrs.length; j++) {
+            const attr = attrs[j];
+            const lowerAttr = attr.toLowerCase();
+            if (attr !== lowerAttr) {
+              const val = el.getAttribute(attr);
+              el.removeAttribute(attr);
+              el.setAttribute(lowerAttr, val);
+            }
+          }
+        }
+      }
+    }
+
     class XSLTProcessor {
       #stylesheetText = null;
       #parameters = new Map();
@@ -386,7 +406,11 @@
             const fakeRoot = `rootelementforparsing`;
             const ns = document instanceof HTMLDocument ? ` xmlns="http://www.w3.org/1999/xhtml"` : '';
             const doc = new DOMParser().parseFromString(`<${fakeRoot}${ns}>${content}</${fakeRoot}>`, mimeType);
-            fragment.append(...doc.querySelector(fakeRoot).childNodes);
+            const rootNode = doc.querySelector(fakeRoot);
+            if (document instanceof HTMLDocument) {
+              lowercaseHtmlAttributes(rootNode);
+            }
+            fragment.append(...rootNode.childNodes);
             return fragment;
           }
           case 'text/html': {
@@ -537,6 +561,7 @@
           mimeType,
         );
         root = parsedDoc.querySelector(fakeRoot);
+        lowercaseHtmlAttributes(root);
       } else {
         parsedDoc = new DOMParser().parseFromString(htmlString, mimeType || 'text/html');
         root = parsedDoc.documentElement;
