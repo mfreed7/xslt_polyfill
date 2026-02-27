@@ -730,6 +730,22 @@ const testCases = [
         </script>
         </body>`,
   },
+  {
+    name: 'Direct XSL Loading',
+    xml: `<?xml version="1.0" encoding="UTF-8"?>
+        <?xml-stylesheet type="text/xsl" href="#"?>
+        <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+          <xsl:output method="html" encoding="UTF-8"/>
+          <xsl:template match="/">
+            <html>
+              <body>
+                {{SCRIPT_INJECTION_LOCATION}}
+                <div id="target" style="color:green">PASS</div>
+              </body>
+            </html>
+          </xsl:template>
+        </xsl:stylesheet>`,
+  },
 ];
 
 const fs = require('fs');
