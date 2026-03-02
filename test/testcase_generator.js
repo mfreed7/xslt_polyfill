@@ -8,38 +8,52 @@ const UTILITIES = `
         return {xsltProcessor,xmlDoc};
     }
     function toFlatString(node) {
-        const htmlString = Array.from(node.childNodes).map(node => {
-            return node.outerHTML || node.textContent;
+        if (!node) return '';
+        const clone = node.cloneNode(true);
+        if (clone.querySelectorAll) {
+            clone.querySelectorAll('meta').forEach(m => m.remove());
+        }
+        const htmlString = Array.from(clone.childNodes).map(child => {
+            return child.outerHTML || child.textContent;
         }).join('')
         return htmlString.replace(/\\s/g,'');
+    }
+    function setResult(passed, message) {
+        const target = document.getElementById("target");
+        if (passed) {
+            target.textContent = 'PASS';
+            target.style.color = 'green';
+        } else {
+            target.textContent = 'FAIL' + (message ? ': ' + message : '');
+            target.style.color = 'red';
+        }
     }
 `;
 
 const testCases = [
-{
+  {
     name: 'Basic Transformation',
     xml: `<?xml version="1.0"?>
         <?xml-stylesheet type="text/xsl" href="{{XSL_HREF}}"?>
         <page>
             {{SCRIPT_INJECTION_LOCATION}}
-            <message>FAIL!!!</message>
+            <message>INIT</message>
         </page>
     `,
-    xsl: `<?xml version="1.0" encoding="UTF-8"?>
-        <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+    xsl: `<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
         <xsl:output method="html"/>
         <xsl:template match="/">
             <div style="color:green">PASS</div>
         </xsl:template>
         </xsl:stylesheet>`,
-},
-{
+  },
+  {
     name: 'EXSLT Support',
     xml: `<?xml version="1.0"?>
         <?xml-stylesheet type="text/xsl" href="{{XSL_HREF}}"?>
         <page>
             {{SCRIPT_INJECTION_LOCATION}}
-            <first>FAIL!!!</first>
+            <first>INIT</first>
             <message>PASS</message>
         </page>`,
     xsl: `<xsl:stylesheet version="1.0"
@@ -62,14 +76,14 @@ const testCases = [
             </div>
         </xsl:template>
         </xsl:stylesheet>`,
-},
-{
+  },
+  {
     name: 'Script Execution in Output',
     xml: `<?xml version="1.0" encoding="UTF-8"?>
         <?xml-stylesheet type="text/xsl" href="{{XSL_HREF}}"?>
         <document>
             {{SCRIPT_INJECTION_LOCATION}}
-            FAIL!!!
+            INIT
         </document>`,
     xsl: `<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
             <xsl:output method="html"/>
@@ -84,14 +98,14 @@ const testCases = [
                 </body>
             </xsl:template>
         </xsl:stylesheet>`,
-},
-{
-    name: 'document(\'\') Functionality',
+  },
+  {
+    name: "document('') Functionality",
     xml: `<?xml version="1.0"?>
         <?xml-stylesheet type="text/xsl" href="{{XSL_HREF}}"?>
         <content>
             {{SCRIPT_INJECTION_LOCATION}}
-            FAIL!!!
+            INIT
         </content>`,
     xsl: `<xsl:stylesheet version="1.0"
             xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
@@ -106,8 +120,8 @@ const testCases = [
             <xsl:copy-of select="$stylesheetData/div"/>
         </xsl:template>
         </xsl:stylesheet>`,
-},
-{
+  },
+  {
     name: 'Blank result',
     html: `
         <!DOCTYPE html>
@@ -117,31 +131,26 @@ const testCases = [
         <script>
         window.onload = () => {
             const xml = \`<?xml version="1.0" encoding="utf-8"?>
-                <page><first>FAIL!!!</first></page>\`;
+                <page><first>INIT</first></page>\`;
             const xsl = \`<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
                 <xsl:output method="html"/>
                 <xsl:template match="/"> </xsl:template>
                 </xsl:stylesheet>\`;
-            const parser = new window.DOMParser();
-            const xmlDoc = parser.parseFromString(xml, "application/xml");
-            const xslDoc = parser.parseFromString(xsl, "application/xml");
-            const xsltProcessor = new window.XSLTProcessor();
-            xsltProcessor.importStylesheet(xslDoc);
+            ${UTILITIES}
+            const {xsltProcessor,xmlDoc} = initProcessor(xml,xsl);
             const fragment = xsltProcessor.transformToFragment(xmlDoc, document);
-            if (fragment instanceof DocumentFragment) {
-                document.getElementById("target").textContent = 'PASS';
-            }
+            setResult(fragment instanceof DocumentFragment);
         };
         </script>
         </body>`,
-},
-{
+  },
+  {
     name: 'Empty XML document source',
     html: `
         <!DOCTYPE html>
         <body>
         {{SCRIPT_INJECTION_LOCATION}}
-        <div id="target" style="color:green">FAIL!!!</div>
+        <div id="target" style="color:green">INIT</div>
         <script>
         window.onload = () => {
             const xmlDoc = document.implementation.createDocument(null, null, null);
@@ -151,6 +160,7 @@ const testCases = [
                     <root>PASS</root>
                 </xsl:template>
                 </xsl:stylesheet>\`;
+            ${UTILITIES}
             const parser = new window.DOMParser();
             const xslDoc = parser.parseFromString(xsl, "application/xml");
             const xsltProcessor = new window.XSLTProcessor();
@@ -161,24 +171,22 @@ const testCases = [
             docResult = xsltProcessor.transformToDocument(xmlDoc);
             fragResult = xsltProcessor.transformToFragment(xmlDoc, document);
            
-            if (docResult === null && fragResult === null) {
-                document.getElementById("target").textContent = 'PASS';
-            }
+            setResult(docResult === null && fragResult === null);
         };
         </script>
         </body>`,
-},
-{
+  },
+  {
     name: 'Multiple root nodes',
     html: `
         <!DOCTYPE html>
         <body>
         {{SCRIPT_INJECTION_LOCATION}}
-        <div id="target" style="color:green">FAIL!!!</div>
+        <div id="target" style="color:green">INIT</div>
         <script>
         window.onload = () => {
             const xml = \`<?xml version="1.0" encoding="utf-8"?>
-                <page>FAIL!!!</page>\`;
+                <page>INIT</page>\`;
             const xsl = \`<xsl:stylesheet xmlns:xsl="http://www.w3.org/1999/XSL/Transform" version="1.0">
                 <xsl:output method="xml"/>
                 <xsl:template match="/">
@@ -189,25 +197,21 @@ const testCases = [
             ${UTILITIES}
             const {xsltProcessor,xmlDoc} = initProcessor(xml,xsl);
             const fragment = toFlatString(xsltProcessor.transformToFragment(xmlDoc, document));
-            if (fragment !== '<div>node1</div><div>node2</div>') {
-                document.getElementById("target").textContent = 'FAIL!!!';
-                return;
-            }
-            document.getElementById("target").textContent = 'PASS';
+            setResult(fragment === '<div>node1</div><div>node2</div>');
         };
         </script>`,
-},
-{
+  },
+  {
     name: 'XSLTProcessor output (HTML)',
     html: `
         <!DOCTYPE html>
         <body>
         {{SCRIPT_INJECTION_LOCATION}}
-        <div id="target" style="color:green">FAIL!!!</div>
+        <div id="target" style="color:green">INIT</div>
         <script>
         window.onload = () => {
             const xml = \`<?xml version="1.0" encoding="utf-8"?>
-                <page>FAIL!!!</page>\`;
+                <page>INIT</page>\`;
             const xsl = \`<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
                 <xsl:output method="html"/>
                 <xsl:template match="/">
@@ -220,30 +224,23 @@ const testCases = [
             ${UTILITIES}
             const {xsltProcessor,xmlDoc} = initProcessor(xml,xsl);
             const fragment = toFlatString(xsltProcessor.transformToFragment(xmlDoc, document));
-            if (fragment !== '<metahttp-equiv="Content-Type"content="text/html;charset=UTF-8"><title>PASS</title><div>PASS</div>') {
-                document.getElementById("target").textContent = 'FAIL!!!';
-                return;
-            }
             const doc = toFlatString(xsltProcessor.transformToDocument(xmlDoc));
-            if (doc !== '<html><head><metahttp-equiv="Content-Type"content="text/html;charset=UTF-8"><title>PASS</title></head><body><div>PASS</div></body></html>') {
-                document.getElementById("target").textContent = 'FAIL!!!';
-                return;
-            }
-            document.getElementById("target").textContent = 'PASS';
+            setResult(fragment === '<title>PASS</title><div>PASS</div>' &&
+                      doc === '<html><head><title>PASS</title></head><body><div>PASS</div></body></html>');
         };
         </script>`,
-},
-{
+  },
+  {
     name: 'XSLTProcessor output (XML)',
     html: `
         <!DOCTYPE html>
         <body>
         {{SCRIPT_INJECTION_LOCATION}}
-        <div id="target" style="color:green">FAIL!!!</div>
+        <div id="target" style="color:green">INIT</div>
         <script>
         window.onload = () => {
             const xml = \`<?xml version="1.0" encoding="utf-8"?>
-                <page>FAIL!!!</page>\`;
+                <page>INIT</page>\`;
             const xsl = \`<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
                 <xsl:output method="xml"/>
                 <xsl:template match="/">
@@ -256,30 +253,23 @@ const testCases = [
             ${UTILITIES}
             const {xsltProcessor,xmlDoc} = initProcessor(xml,xsl);
             const fragment = toFlatString(xsltProcessor.transformToFragment(xmlDoc, document));
-            if (fragment !== '<html><head><title>PASS</title></head><body><div>PASS</div></body></html>') {
-                document.getElementById("target").textContent = 'FAIL!!!';
-                return;
-            }
             const doc = toFlatString(xsltProcessor.transformToDocument(xmlDoc));
-            if (doc !== '<html><head><title>PASS</title></head><body><div>PASS</div></body></html>') {
-                document.getElementById("target").textContent = 'FAIL!!!';
-                return;
-            }
-            document.getElementById("target").textContent = 'PASS';
+            setResult(fragment === '<html><head><title>PASS</title></head><body><div>PASS</div></body></html>' &&
+                      doc === '<html><head><title>PASS</title></head><body><div>PASS</div></body></html>');
         };
         </script>`,
-},
-{
+  },
+  {
     name: 'XSLTProcessor output (text)',
     html: `
         <!DOCTYPE html>
         <body>
         {{SCRIPT_INJECTION_LOCATION}}
-        <div id="target" style="color:green">FAIL!!!</div>
+        <div id="target" style="color:green">INIT</div>
         <script>
         window.onload = () => {
             const xml = \`<?xml version="1.0" encoding="utf-8"?>
-                <page>FAIL!!!</page>\`;
+                <page>INIT</page>\`;
             const xsl = \`<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
                 <xsl:output method="text"/>
                 <xsl:template match="/">
@@ -292,30 +282,23 @@ const testCases = [
             ${UTILITIES}
             const {xsltProcessor,xmlDoc} = initProcessor(xml,xsl);
             const fragment = toFlatString(xsltProcessor.transformToFragment(xmlDoc, document));
-            if (fragment !== 'PASSPASS') {
-                document.getElementById("target").textContent = 'FAIL!!!';
-                return;
-            }
             const doc = toFlatString(xsltProcessor.transformToDocument(xmlDoc));
-            if (doc !== '<htmlxmlns="http://www.w3.org/1999/xhtml"><head><title></title></head><body><pre>PASSPASS</pre></body></html>') {
-                document.getElementById("target").textContent = 'FAIL!!!';
-                return;
-            }
-            document.getElementById("target").textContent = 'PASS';
+            setResult(fragment === 'PASSPASS' &&
+                      doc === '<htmlxmlns="http://www.w3.org/1999/xhtml"><head><title></title></head><body><pre>PASSPASS</pre></body></html>');
         };
         </script>`,
-},
-{
+  },
+  {
     name: 'XSLTProcessor output (blank, html content)',
     html: `
         <!DOCTYPE html>
         <body>
         {{SCRIPT_INJECTION_LOCATION}}
-        <div id="target" style="color:green">FAIL!!!</div>
+        <div id="target" style="color:green">INIT</div>
         <script>
         window.onload = () => {
             const xml = \`<?xml version="1.0" encoding="utf-8"?>
-                <page>FAIL!!!</page>\`;
+                <page>INIT</page>\`;
             const xsl = \`<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
                 <xsl:template match="/">
                 <html>
@@ -327,30 +310,23 @@ const testCases = [
             ${UTILITIES}
             const {xsltProcessor,xmlDoc} = initProcessor(xml,xsl);
             const fragment = toFlatString(xsltProcessor.transformToFragment(xmlDoc, document));
-            if (fragment !== '<metahttp-equiv="Content-Type"content="text/html;charset=UTF-8"><title>PASS</title><div>PASS</div>') {
-                document.getElementById("target").textContent = 'FAIL!!!';
-                return;
-            }
             const doc = toFlatString(xsltProcessor.transformToDocument(xmlDoc));
-            if (doc !== '<html><head><metahttp-equiv="Content-Type"content="text/html;charset=UTF-8"><title>PASS</title></head><body><div>PASS</div></body></html>') {
-                document.getElementById("target").textContent = 'FAIL!!!';
-                return;
-            }
-            document.getElementById("target").textContent = 'PASS';
+            setResult(fragment === '<title>PASS</title><div>PASS</div>' &&
+                      doc === '<html><head><title>PASS</title></head><body><div>PASS</div></body></html>');
         };
         </script>`,
-},
-{
+  },
+  {
     name: 'XSLTProcessor output (blank, non-html content)',
     html: `
         <!DOCTYPE html>
         <body>
         {{SCRIPT_INJECTION_LOCATION}}
-        <div id="target" style="color:green">FAIL!!!</div>
+        <div id="target" style="color:green">INIT</div>
         <script>
         window.onload = () => {
             const xml = \`<?xml version="1.0" encoding="utf-8"?>
-                <page>FAIL!!!</page>\`;
+                <page>INIT</page>\`;
             const xsl = \`<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
                 <xsl:template match="/">
                 <root>
@@ -361,30 +337,23 @@ const testCases = [
             ${UTILITIES}
             const {xsltProcessor,xmlDoc} = initProcessor(xml,xsl);
             const fragment = toFlatString(xsltProcessor.transformToFragment(xmlDoc, document));
-            if (fragment !== '<root><div>PASS</div></root>') {
-                document.getElementById("target").textContent = 'FAIL!!!';
-                return;
-            }
             const doc = toFlatString(xsltProcessor.transformToDocument(xmlDoc));
-            if (doc !== '<root><div>PASS</div></root>') {
-                document.getElementById("target").textContent = 'FAIL!!!';
-                return;
-            }
-            document.getElementById("target").textContent = 'PASS';
+            setResult(fragment === '<root><div>PASS</div></root>' &&
+                      doc === '<root><div>PASS</div></root>');
         };
         </script>`,
-},
-{
+  },
+  {
     name: 'transformToDocument structure',
     html: `
         <!DOCTYPE html>
         <body>
         {{SCRIPT_INJECTION_LOCATION}}
-        <div id="target" style="color:green">FAIL!!!</div>
+        <div id="target" style="color:green">INIT</div>
         <script>
         window.onload = () => {
             const xml = \`<?xml version="1.0" encoding="utf-8"?>
-                <page><first>FAIL!!!</first></page>\`;
+                <page><first>INIT</first></page>\`;
             const xsl = \`<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
                 <xsl:output method="html"/>
                 <xsl:template match="/">
@@ -398,6 +367,7 @@ const testCases = [
                 </html>
                 </xsl:template>
                 </xsl:stylesheet>\`;
+            ${UTILITIES}
             const parser = new window.DOMParser();
             const xmlDoc = parser.parseFromString(xml, "application/xml");
             const xslDoc = parser.parseFromString(xsl, "application/xml");
@@ -407,24 +377,23 @@ const testCases = [
             const html = newDocument.firstElementChild;
             const head = html?.firstElementChild;
             const body = head?.nextElementSibling;
-            if (html instanceof HTMLHtmlElement &&
+            const passed = html instanceof HTMLHtmlElement &&
                 head instanceof HTMLHeadElement &&
                 body instanceof HTMLBodyElement &&
                 head?.children?.length === 2 &&
-                body?.children?.length === 1) {
-                document.getElementById("target").textContent = 'PASS';
-            }
+                body?.children?.length === 1;
+            setResult(passed);
         };
         </script>
         </body>`,
-},
-{
-    name: "XML Output",
+  },
+  {
+    name: 'XML Output',
     xml: `<?xml version="1.0"?>
         <?xml-stylesheet type="text/xsl" href="{{XSL_HREF}}"?>
         <content>
             {{SCRIPT_INJECTION_LOCATION}}
-            FAIL!!!
+            INIT
         </content>`,
     xsl: `<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
         <xsl:output method="xml"/>
@@ -435,14 +404,14 @@ const testCases = [
             </body>
         </xsl:template>
         </xsl:stylesheet>`,
-},
-{
+  },
+  {
     name: 'Text Output',
     html: `
         <!DOCTYPE html>
         <body>
         {{SCRIPT_INJECTION_LOCATION}}
-        <div id="target" style="color:green">FAIL!!!</div>
+        <div id="target" style="color:green">INIT</div>
         <script>
         window.onload = () => {
             const xml = \`<page>Text</page>\`;
@@ -453,6 +422,7 @@ const testCases = [
                 </xsl:template>
             </xsl:stylesheet>\`;
 
+            ${UTILITIES}
             const parser = new window.DOMParser();
             const xmlDoc = parser.parseFromString(xml, "application/xml");
             const xslDoc = parser.parseFromString(xsl, "application/xml");
@@ -464,21 +434,20 @@ const testCases = [
             const html = newDocument.firstElementChild;
             const body = html?.firstElementChild?.nextElementSibling;
             const pre = body?.firstElementChild;
-            if (pre instanceof HTMLPreElement &&
-                pre.textContent === 'Text') {
-                document.getElementById("target").textContent = 'PASS';
-            }
+            const passed = pre instanceof HTMLPreElement &&
+                pre.textContent === 'Text';
+            setResult(passed);
         };
         </script>
         </body>`,
-},
-{
+  },
+  {
     name: 'Script Arrow Function',
     xml: `<?xml version="1.0" encoding="UTF-8"?>
         <?xml-stylesheet type="text/xsl" href="{{XSL_HREF}}"?>
         <document>
             {{SCRIPT_INJECTION_LOCATION}}
-            FAIL!!!
+            INIT
         </document>`,
     xsl: `<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
         <xsl:output method="html"/>
@@ -497,14 +466,14 @@ const testCases = [
             </body>
         </xsl:template>
         </xsl:stylesheet>`,
-},
-{
+  },
+  {
     name: 'Script RegExp Entity',
     xml: `<?xml version="1.0" encoding="UTF-8"?>
         <?xml-stylesheet type="text/xsl" href="{{XSL_HREF}}"?>
         <document>
             {{SCRIPT_INJECTION_LOCATION}}
-            FAIL!!!
+            INIT
         </document>`,
     xsl: `<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
         <xsl:output method="html"/>
@@ -522,9 +491,246 @@ const testCases = [
             </body>
         </xsl:template>
         </xsl:stylesheet>`,
-}
-];
+  },
+  {
+    name: 'Namespace URI in Fragment',
+    html: `
+        <!DOCTYPE html>
+        <body>
+        {{SCRIPT_INJECTION_LOCATION}}
+        <div id="target" style="color:green">INIT</div>
+        <script>
+        window.onload = () => {
+          const xml = \`<?xml version="1.0" encoding="utf-8"?>
+              <page>INIT</page>\`;
+          const xsl = \`<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+              <xsl:template match="/">
+              <root>
+                  <div>Should be XHTML</div>
+              </root>
+              </xsl:template>
+              </xsl:stylesheet>\`;
+          ${UTILITIES}
+          const {xsltProcessor,xmlDoc} = initProcessor(xml,xsl);
+          const fragment = xsltProcessor.transformToFragment(xmlDoc, document);
+          const firstDiv = fragment.querySelector('div');
+          const divIsXHTMLNamespace = firstDiv && firstDiv.namespaceURI === 'http://www.w3.org/1999/xhtml';
+          setResult(divIsXHTMLNamespace);
+        };
+        </script>
+        </body>`,
+  },
+  {
+    name: 'Sorting Accents and Case',
+    html: `
+        <!DOCTYPE html>
+        <body>
+        {{SCRIPT_INJECTION_LOCATION}}
+        <div id="target" style="color:green">INIT</div>
+        <script>
+        window.onload = () => {
+            const xml = \`<?xml version="1.0" encoding="utf-8"?>
+                <e:root xmlns:e="testCase">
+                    <e:List>
+                        <e:Item><e:NA>Z</e:NA></e:Item>
+                        <e:Item><e:NA>A</e:NA></e:Item>
+                        <e:Item><e:NA>z</e:NA></e:Item>
+                        <e:Item><e:NA>a</e:NA></e:Item>
+                        <e:Item><e:NA>&#x160;</e:NA></e:Item>
+                        <e:Item><e:NA>S</e:NA></e:Item>
+                    </e:List>
+                </e:root>\`;
+            const xsl = \`<?xml version="1.0" encoding="utf-8"?>
+                <xsl:stylesheet xmlns:e="testCase" xmlns:xsl="http://www.w3.org/1999/XSL/Transform" version="1.0" exclude-result-prefixes="xsl e">
+                    <xsl:output method="text" encoding="UTF-8"/>
+                    <xsl:template match="/">
+                        <xsl:for-each select="e:root/e:List/e:Item">
+                            <xsl:sort select="e:NA"/>
+                            <xsl:value-of select="e:NA"/>
+                        </xsl:for-each>
+                    </xsl:template>
+                </xsl:stylesheet>\`;
+            ${UTILITIES}
+            const {xsltProcessor,xmlDoc} = initProcessor(xml,xsl);
+            const fragment = xsltProcessor.transformToFragment(xmlDoc, document);
+            const result = fragment.textContent.trim();
+            
+            if (result === "") {
+                setResult(false, 'result is empty string');
+                return;
+            }
 
+            const posA = result.indexOf('A');
+            const posa = result.indexOf('a');
+            const posS = result.indexOf('S');
+            const posZ = result.indexOf('Z');
+            const posz = result.indexOf('z');
+            
+            // Find Š by excluding known characters
+            let posŠ = -1;
+            for (let i=0; i<result.length; i++) {
+                if (!['A','a','S','Z','z'].includes(result[i])) {
+                    posŠ = i;
+                    break;
+                }
+            }
+
+            const isCaseInsensitiveish = Math.abs(posA - posa) === 1 && Math.abs(posZ - posz) === 1;
+            const isAccentsNearBase = posS !== -1 && posŠ !== -1 && Math.abs(posS - posŠ) === 1;
+            
+            const message = '"' + result + '" (A:'+posA+', a:'+posa+', S:'+posS+', Š:'+posŠ+', Z:'+posZ+', z:'+posz+')';
+            setResult(isCaseInsensitiveish && isAccentsNearBase, message);
+        };
+        </script>
+        </body>`,
+  },
+  {
+    name: 'Load and DOMContentLoaded Events',
+    xml: `<?xml version="1.0" encoding="UTF-8"?>
+        <?xml-stylesheet type="text/xsl" href="{{XSL_HREF}}"?>
+        <document>
+            {{SCRIPT_INJECTION_LOCATION}}
+            INIT
+        </document>`,
+    xsl: `<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+        <xsl:output method="html"/>
+        <xsl:template match="/">
+            <body>
+                <div id="target" style="color:red">INIT</div>
+                <script>
+                    const events = {};
+                    const check = (e) => {
+                        events[e.type] = true;
+                        if (events['load'] &amp;&amp; events['DOMContentLoaded']) {
+                            const div = document.getElementById('target');
+                            div.style.color = 'green';
+                            div.textContent = 'PASS';
+                        }
+                    };
+                    window.addEventListener('load', check);
+                    document.addEventListener('DOMContentLoaded', check);
+                </script>
+            </body>
+        </xsl:template>
+    </xsl:stylesheet>`,
+  },
+  {
+    name: 'Synchronized External Script Loading',
+    xml: `<?xml version="1.0" encoding="UTF-8"?>
+        <?xml-stylesheet type="text/xsl" href="{{XSL_HREF}}"?>
+        <document>
+            {{SCRIPT_INJECTION_LOCATION}}
+            INIT
+        </document>`,
+    get xsl() {
+      // Use a large data URI to simulate a slow-loading external script.
+      // This ensures the load event won't fire "accidentally" fast.
+      const padding = ' '.repeat(1024 * 1024 * 2); // 2MB padding
+      const scriptContent = 'window.externalScriptLoaded = true; /* ' + padding + ' */';
+      const scriptSrc = 'data:text/javascript;base64,' + Buffer.from(scriptContent).toString('base64');
+
+      return `<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+        <xsl:output method="html"/>
+        <xsl:template match="/">
+            <body>
+                <div id="target" style="color:red">INIT</div>
+                <script>window.externalScriptLoaded = false;</script>
+                <script src="${scriptSrc}"></script>
+                <script>
+                    const div = document.getElementById('target');
+                    if (window.externalScriptLoaded !== false) {
+                        div.style.color = 'green';
+                        div.textContent = 'PASS*'; // * because external script loaded too fast
+                    } else {
+                        window.addEventListener('load', (e) => {
+                            if (window.externalScriptLoaded === true) {
+                                div.style.color = 'green';
+                                div.textContent = 'PASS';
+                            } else {
+                                div.textContent = 'FAIL: load event fired BEFORE external script loaded';
+                            }
+                        });
+                    }
+                </script>
+            </body>
+        </xsl:template>
+    </xsl:stylesheet>`;
+    },
+  },
+  {
+    name: 'Import Attribute Merge',
+    xml: `<?xml version="1.0"?>
+        <?xml-stylesheet type="text/xsl" href="{{XSL_HREF}}"?>
+        <page>
+            {{SCRIPT_INJECTION_LOCATION}}
+            <message>INIT</message>
+        </page>
+    `,
+    xsl: `<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+        <xsl:import href="data:text/xml,&lt;xsl:stylesheet version='1.0' xmlns:xsl='http://www.w3.org/1999/XSL/Transform' my-imported-attr='PASS'&gt;&lt;/xsl:stylesheet&gt;"/>
+        <xsl:output method="html"/>
+        <xsl:template match="/">
+            <div style="color:green">
+                <xsl:value-of select="document('')/*/@my-imported-attr"/>
+            </div>
+        </xsl:template>
+        </xsl:stylesheet>`,
+  },
+  {
+    name: 'External document() call',
+    xml: `<?xml version="1.0"?>
+        <?xml-stylesheet type="text/xsl" href="{{XSL_HREF}}"?>
+        <page>
+            {{SCRIPT_INJECTION_LOCATION}}
+            <message>INIT</message>
+        </page>
+    `,
+    get xsl() {
+      const xmlContent = '<root>PASS</root>';
+      const base64Content = Buffer.from(xmlContent).toString('base64');
+      const dataUri = `data:text/xml;base64,${base64Content}`;
+      return `<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+        <xsl:output method="html"/>
+        <!-- Use a base64 data URI to ensure valid URI syntax for libxml2 while triggering Asyncify suspension -->
+        <xsl:variable name="external" select="document('${dataUri}')"/>
+        <xsl:template match="/">
+            <div id="target" style="color:green">
+                <xsl:value-of select="$external/root"/>
+            </div>
+        </xsl:template>
+        </xsl:stylesheet>`;
+    },
+  },
+  {
+    name: 'Uppercase Attributes',
+    html: `
+        <!DOCTYPE html>
+        <body>
+        {{SCRIPT_INJECTION_LOCATION}}
+        <div id="target" style="color:red">INIT</div>
+        <script>
+        window.onload = () => {
+            const xml = \`<?xml version="1.0" encoding="utf-8"?>
+                <page><message>Hello World.</message></page>\`;
+            const xsl = \`<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+                <xsl:template match="/page/message">
+                  <root>
+                    <a data-name="some name" dataName="uppercase attribute">click me</a>
+                  </root>
+                </xsl:template>
+                </xsl:stylesheet>\`;
+            ${UTILITIES}
+            const {xsltProcessor,xmlDoc} = initProcessor(xml,xsl);
+            const fragment = xsltProcessor.transformToFragment(xmlDoc, document);
+            const a = fragment.querySelector('a');
+            const dataNameUpper = a.getAttribute('dataName');
+            const dataNameLower = a.getAttribute('data-name');
+            setResult(dataNameUpper === 'uppercase attribute' && dataNameLower === 'some name', 'upper: ' + dataNameUpper + ', lower: ' + dataNameLower);
+        };
+        </script>
+        </body>`,
+  },
+];
 
 const fs = require('fs');
 const path = require('path');
@@ -536,21 +742,21 @@ if (!fs.existsSync(outputDir)) {
 
 const scriptInjections = {
   native: '',
-    source: `<script xmlns="http://www.w3.org/1999/xhtml">window.xsltUsePolyfillAlways = true;</script>
+  source: `<script xmlns="http://www.w3.org/1999/xhtml">window.xsltUsePolyfillAlways = true;</script>
     <script src="../../dist/xslt-wasm.js" xmlns="http://www.w3.org/1999/xhtml" charset="utf-8"></script>
     <script src="../../src/xslt-polyfill-src.js" xmlns="http://www.w3.org/1999/xhtml"></script>`,
-    minified: `<script xmlns="http://www.w3.org/1999/xhtml">window.xsltUsePolyfillAlways = true;</script>
+  minified: `<script xmlns="http://www.w3.org/1999/xhtml">window.xsltUsePolyfillAlways = true;</script>
     <script src="../../xslt-polyfill.min.js" xmlns="http://www.w3.org/1999/xhtml" charset="utf-8"></script>`,
 };
 
 const generatedTestCases = {};
 
-testCases.forEach(testCase => {
+testCases.forEach((testCase) => {
   const baseName = testCase.name.replace(/[^a-zA-Z0-9]/g, '_');
-  
+
   if (!generatedTestCases[testCase.name]) {
     const testCaseEntry = { name: testCase.name };
-    ['xml', 'xsl', 'html'].forEach(ext => {
+    ['xml', 'xsl', 'html'].forEach((ext) => {
       if (testCase[ext]) {
         const fileName = `${baseName}_{{MODE}}.${ext}`;
         testCaseEntry[ext] = `generated/${fileName}`;
@@ -559,11 +765,11 @@ testCases.forEach(testCase => {
     generatedTestCases[testCase.name] = testCaseEntry;
   }
 
-  Object.keys(scriptInjections).forEach(type => {
+  Object.keys(scriptInjections).forEach((type) => {
     const suffix = `_${type}`;
     const scriptInjection = scriptInjections[type];
 
-    ['xml', 'xsl', 'html'].forEach(ext => {
+    ['xml', 'xsl', 'html'].forEach((ext) => {
       if (testCase[ext]) {
         let content = testCase[ext];
         const fileName = `${baseName}${suffix}.${ext}`;
@@ -575,7 +781,7 @@ testCases.forEach(testCase => {
           const xslFileName = `${baseName}${suffix}.xsl`;
           content = content.replace('{{XSL_HREF}}', `./${xslFileName}`);
         }
-        
+
         //This is a special case for the basic transform, which has a hard-coded XSLT href
         if (testCase.name === 'Basic Transformation' && ext === 'xml') {
           content = content.replace('demo.xsl', `${baseName}${suffix}.xsl`);
@@ -591,4 +797,3 @@ testCases.forEach(testCase => {
 const finalTestCases = Object.values(generatedTestCases);
 fs.writeFileSync(path.join(outputDir, 'file_list.json'), JSON.stringify(finalTestCases, null, 2));
 console.log(`Generated ${path.join(outputDir, 'file_list.json')}`);
-

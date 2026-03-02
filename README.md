@@ -68,6 +68,8 @@ The example above is available in the `test/` folder of this repo:
 ### Limitations
 
 Note that as of now, there are a few things that don't work perfectly:
+ - You'll need to be running the polyfill in a browser with the native XSLT
+   feature disabled. In Chrome, you can do this at `chrome://flags/#xslt`.
  - The output of the transformation is assumed to be HTML in a few places.
    If the output is something else, like text or XML, things will likely break.
  - The `parseAndReplaceCurrentXMLDoc()` function will replace the contents of

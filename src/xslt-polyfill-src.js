@@ -11,7 +11,7 @@
 //   https://github.com/DesignLiquido/xslt-processor/tree/main
 // Please see its copyright terms in src/xslt-processor/LICENSE.
 
-(function() {
+(function () {
   // Feature detection
   if (window.xsltPolyfillInstalled) {
     return;
@@ -19,13 +19,13 @@
   window.xsltPolyfillInstalled = true;
   let polyfillReadyPromiseResolve;
   let polyfillReadyPromiseReject;
-  const polyfillReadyPromise = new Promise((resolve,reject) => {
+  const polyfillReadyPromise = new Promise((resolve, reject) => {
     polyfillReadyPromiseResolve = resolve;
     polyfillReadyPromiseReject = reject;
   });
-  window.xsltUsePolyfillAlways = ('xsltUsePolyfillAlways' in window) ? window.xsltUsePolyfillAlways : false;
-  window.xsltDontAutoloadXmlDocs = ('xsltDontAutoloadXmlDocs' in window) ? window.xsltDontAutoloadXmlDocs : false;
-  let nativeSupported = ('XSLTProcessor' in window) && window.XSLTProcessor.toString().includes('native code');
+  window.xsltUsePolyfillAlways = 'xsltUsePolyfillAlways' in window ? window.xsltUsePolyfillAlways : false;
+  window.xsltDontAutoloadXmlDocs = 'xsltDontAutoloadXmlDocs' in window ? window.xsltDontAutoloadXmlDocs : false;
+  let nativeSupported = 'XSLTProcessor' in window && window.XSLTProcessor.toString().includes('native code');
   if (nativeSupported) {
     try {
       new XSLTProcessor();
@@ -38,27 +38,53 @@
     // The polyfill
     const promiseName = 'xsltPolyfillReady';
 
+    // Initialize the Wasm module as early as possible.
+    let WasmModule = null;
+    let wasm_transform = null;
+    let wasm_transform_async = null;
+    let wasm_free = null;
+
+    createXSLTTransformModule()
+      .then((Module) => {
+        WasmModule = Module;
+        const args = ['transform', 'number', ['number', 'number', 'number', 'number', 'number', 'number', 'number']];
+        wasm_transform = Module.cwrap(...args, { async: false });
+        wasm_transform_async = Module.cwrap(...args, { async: true });
+        wasm_free = Module._free;
+
+        // Tell people we're ready.
+        polyfillReadyPromiseResolve();
+      })
+      .catch((err) => {
+        console.error('Error loading XSLT Wasm module:', err);
+        polyfillReadyPromiseReject(err);
+      });
+
     async function loadDoc(fn, cache) {
-      const res = await fetch(fn, {cache: cache});
+      const res = await fetch(fn, { cache: cache });
       if (!res.ok) {
         return null;
       }
       const xmltext = await res.text();
-      return (new DOMParser()).parseFromString(xmltext, 'text/xml');
+      return new DOMParser().parseFromString(xmltext, 'text/xml');
     }
 
-    function isDuplicateParam(nodeToImport, xsltsheet, xslns) {
-      if (nodeToImport.nodeName !== 'xsl:param') {
+    function isDuplicateParam(nodeToImport, existingParamNames) {
+      if (nodeToImport.localName !== 'param' || nodeToImport.namespaceURI !== 'http://www.w3.org/1999/XSL/Transform') {
         return false;
       }
-      const name = nodeToImport.getAttribute('name');
+      return existingParamNames.has(nodeToImport.getAttribute('name'));
+    }
+
+    function getTopLevelParamNames(xsltsheet, xslns) {
       const params = xsltsheet.documentElement.getElementsByTagNameNS(xslns, 'param');
+      const names = new Set();
       for (const param of params) {
-        if (param.parentElement === xsltsheet.documentElement && param.getAttribute('name') === name) {
-          return true;
+        if (param.parentElement === xsltsheet.documentElement) {
+          names.add(param.getAttribute('name'));
         }
       }
-      return false;
+      return names;
     }
 
     // Recursively fetches and inlines <xsl:import> statements within an XSLT document.
@@ -75,52 +101,66 @@
       if (!relurl) {
         relurl = window.location.href;
       }
-      for (const importElement of imports) {
-        const href = (new URL(importElement.getAttribute('href'), relurl)).href;
-        const importedDoc = await loadDoc(href, 'default');
-        if (!importedDoc || !importedDoc.documentElement) {
-            continue;
-        }
-        const attrs = importedDoc.documentElement.getAttributeNames();
-        for(const attr of attrs) {
-          if(!xsltsheet.documentElement.getAttribute(attr))
-            xsltsheet.documentElement.setAttribute(attr,importedDoc.documentElement.getAttribute(attr));
-        }
-        while (importedDoc.documentElement.firstChild) {
-          const nodeToImport = importedDoc.documentElement.firstChild;
-          if (isDuplicateParam(nodeToImport, xsltsheet, xslns)) {
-            nodeToImport.remove();
-            continue;
-          }
-          if (nodeToImport.nodeName === 'xsl:import') {
-            const newhref = (new URL(nodeToImport.getAttribute('href'), href)).href;
-            const nestedImportedDoc = await loadDoc(newhref, 'default');
-            if (!nestedImportedDoc) {
-                nodeToImport.remove();
-                continue;
-            }
-            const embed = await compileImports(nestedImportedDoc, newhref);
-            while (embed.documentElement.firstChild) {
-              importElement.before(embed.documentElement.firstChild);
-            }
-            nodeToImport.remove();
-            continue;
-          }
 
-          importElement.before(nodeToImport);
+      const existingParamNames = getTopLevelParamNames(xsltsheet, xslns);
+
+      // Fetch all imports at this level in parallel.
+      const importDocs = await Promise.all(
+        imports.map(async (importElement) => {
+          const href = new URL(importElement.getAttribute('href'), relurl).href;
+          const importedDoc = await loadDoc(href, 'default');
+          return { importElement, importedDoc, href };
+        }),
+      );
+
+      for (const { importElement, importedDoc, href } of importDocs) {
+        if (!importedDoc || !importedDoc.documentElement) {
+          importElement.remove();
+          continue;
+        }
+
+        const importedDocRoot = importedDoc.documentElement;
+        const xsltDocRoot = xsltsheet.documentElement;
+        
+        // Recursively compile imports within the imported document.
+        await compileImports(importedDoc, href);
+
+        const attrs = importedDocRoot.attributes;
+        for (const attr of attrs) {
+          if (!xsltDocRoot.getAttributeNS(attr.namespaceURI,attr.localName)) {
+            xsltDocRoot.setAttributeNS(attr.namespaceURI, attr.name, attr.value);
+          }
+        }
+
+        // Move all children from the imported document to the main document.
+        // Special case: skip duplicate parameters if they were already merged.
+        let child = importedDocRoot.firstChild;
+        while (child) {
+          const next = child.nextSibling;
+          if (isDuplicateParam(child, existingParamNames)) {
+            child.remove();
+          } else {
+            if (child.localName === 'param' && child.namespaceURI === xslns) {
+              existingParamNames.add(child.getAttribute('name'));
+            }
+            importElement.before(child);
+          }
+          child = next;
         }
         importElement.remove();
       }
       return xsltsheet;
     }
 
+    const textEncoder = new TextEncoder();
+    const textDecoder = new TextDecoder();
+
     function transformXmlWithXslt(xmlContent, xsltContent, parameters, xsltUrl, allowAsync, buildPlainText) {
       if (!wasm_transform || !WasmModule) {
-        throw new Error(`Polyfill XSLT Wasm module not yet loaded. Please wait for the ${promiseName} promise to resolve.`);
+        throw new Error(
+          `Polyfill XSLT Wasm module not yet loaded. Please wait for the ${promiseName} promise to resolve.`,
+        );
       }
-
-      const textEncoder = new TextEncoder();
-      const textDecoder = new TextDecoder();
 
       let xmlPtr = 0;
       let xsltPtr = 0;
@@ -131,137 +171,176 @@
 
       // Helper to write byte arrays to Wasm memory manually.
       const writeBytesToHeap = (bytes) => {
-          const ptr = WasmModule._malloc(bytes.length + 1);
-          if (!ptr) throw new Error(`Wasm malloc failed for bytes of length ${bytes.length}`);
-          const heapu8 = new Uint8Array(WasmModule.wasmMemory.buffer);
-          heapu8.set(bytes, ptr);
-          heapu8[ptr + bytes.length] = 0; // Null terminator
-          return ptr;
+        const ptr = WasmModule._malloc(bytes.length + 1);
+        if (!ptr) throw new Error(`Wasm malloc failed for bytes of length ${bytes.length}`);
+        const heapu8 = new Uint8Array(WasmModule.wasmMemory.buffer);
+        heapu8.set(bytes, ptr);
+        heapu8[ptr + bytes.length] = 0; // Null terminator
+        return ptr;
       };
 
       // Helper to write JS strings to Wasm memory manually.
       const writeStringToHeap = (str) => {
-          if (str === null || str === undefined || typeof str !== 'string') {
-            throw new Error(`Cannot write non-string value to Wasm heap: ${str}`);
-          }
-          const encodedStr = textEncoder.encode(str);
-          const ptr = WasmModule._malloc(encodedStr.length + 1);
-          if (!ptr) throw new Error(`Wasm malloc failed for string: ${str.substring(0, 50)}...`);
-          const heapu8 = new Uint8Array(WasmModule.wasmMemory.buffer);
-          heapu8.set(encodedStr, ptr);
-          heapu8[ptr + encodedStr.length] = 0; // Null terminator
-          return ptr;
+        if (str === null || str === undefined || typeof str !== 'string') {
+          throw new Error(`Cannot write non-string value to Wasm heap: ${str}`);
+        }
+        const encodedStr = textEncoder.encode(str);
+        const ptr = WasmModule._malloc(encodedStr.length + 1);
+        if (!ptr) throw new Error(`Wasm malloc failed for string: ${str.substring(0, 50)}...`);
+        const heapu8 = new Uint8Array(WasmModule.wasmMemory.buffer);
+        heapu8.set(encodedStr, ptr);
+        heapu8[ptr + encodedStr.length] = 0; // Null terminator
+        return ptr;
       };
 
       // Helper to read a null-terminated UTF-8 string from Wasm memory.
       const readStringFromHeap = (ptr) => {
-          const heapu8 = new Uint8Array(WasmModule.wasmMemory.buffer);
-          let end = ptr;
-          while (heapu8[end] !== 0) {
-              end++;
-          }
-          return textDecoder.decode(heapu8.subarray(ptr, end));
+        const heapu8 = new Uint8Array(WasmModule.wasmMemory.buffer);
+        let end = ptr;
+        while (heapu8[end] !== 0) {
+          end++;
+        }
+        return textDecoder.decode(heapu8.subarray(ptr, end));
       };
 
+      const cleanup = () => {
+        // Clean up all allocated memory to prevent memory leaks in the Wasm heap.
+        if (xmlPtr) wasm_free(xmlPtr);
+        if (xsltPtr) wasm_free(xsltPtr);
+        if (xsltUrlPtr) wasm_free(xsltUrlPtr);
+        if (mimeTypePtr) wasm_free(mimeTypePtr);
+        paramStringPtrs.forEach((ptr) => wasm_free(ptr));
+        if (paramsPtr) wasm_free(paramsPtr);
+      };
 
       try {
-          // 1. Prepare parameters from the Map into a flat array.
-          // libxslt expects string values to be XPath expressions, so simple strings
-          // must be enclosed in quotes.
-          const paramsArray = [];
-          if (parameters) {
-              for (const [key, value] of parameters.entries()) {
-                  paramsArray.push(key);
-                  // Wrap value in single quotes for libxslt.
-                  // Basic escaping for values containing single quotes is not handled here.
-                  paramsArray.push(`'${String(value)}'`);
-              }
+        // 1. Prepare parameters from the Map into a flat array.
+        // libxslt expects string values to be XPath expressions, so simple strings
+        // must be enclosed in quotes.
+        const paramsArray = [];
+        if (parameters) {
+          for (const [key, value] of parameters.entries()) {
+            paramsArray.push(key);
+            // Wrap value in single quotes for libxslt.
+            // Basic escaping for values containing single quotes is not handled here.
+            paramsArray.push(`'${String(value)}'`);
+          }
+        }
+
+        // 2. Allocate memory for parameter strings and the pointer array in the Wasm heap.
+        if (paramsArray.length > 0) {
+          // Allocate memory for the array of pointers (char**), plus a NULL terminator.
+          const ptrSize = 4; // Pointers are 32-bit in wasm32
+          paramsPtr = WasmModule._malloc((paramsArray.length + 1) * ptrSize);
+          if (!paramsPtr) throw new Error('Wasm malloc failed for params pointer array.');
+
+          // Allocate memory for each string, write it to the heap, and store its pointer.
+          paramsArray.forEach((str, i) => {
+            const strPtr = writeStringToHeap(str);
+            paramStringPtrs.push(strPtr); // Track for later cleanup.
+            // Write the pointer to the string into the paramsPtr array.
+            new DataView(WasmModule.wasmMemory.buffer).setUint32(paramsPtr + i * ptrSize, strPtr, true);
+          });
+
+          // Null-terminate the array of pointers.
+          new DataView(WasmModule.wasmMemory.buffer).setUint32(paramsPtr + paramsArray.length * ptrSize, 0, true);
+        }
+
+        // 3. Allocate memory for XML and XSLT content.
+        const xmlBytes = xmlContent instanceof Uint8Array ? xmlContent : textEncoder.encode(xmlContent);
+        const xsltBytes = xsltContent instanceof Uint8Array ? xsltContent : textEncoder.encode(xsltContent);
+        xmlPtr = writeBytesToHeap(xmlBytes);
+        xsltPtr = writeBytesToHeap(xsltBytes);
+        xsltUrlPtr = writeStringToHeap(xsltUrl);
+
+        // Allocate memory for the output mime type (minimum 32 bytes).
+        mimeTypePtr = WasmModule._malloc(32);
+        if (!mimeTypePtr) throw new Error('Wasm malloc failed for mimeType pointer.');
+        new Uint8Array(WasmModule.wasmMemory.buffer, mimeTypePtr, 32).fill(0);
+
+        // 4. Call the C function with pointers to the data in Wasm memory.
+        const wasm_fn = allowAsync ? wasm_transform_async : wasm_transform;
+        const resultPtr_or_Promise = wasm_fn(
+          xmlPtr,
+          xmlBytes.byteLength,
+          xsltPtr,
+          xsltBytes.byteLength,
+          paramsPtr,
+          xsltUrlPtr,
+          mimeTypePtr,
+        );
+
+        if (!allowAsync && WasmModule.Asyncify && WasmModule.Asyncify.state === 1 /* Suspending */) {
+          throw new Error(
+            "This XSLT transformation contains includes or document() calls. These aren't supported for synchronous XSLTProcessor methods.",
+          );
+        }
+
+        if (!resultPtr_or_Promise) {
+          throw new Error(`XSLT Transformation failed. See console for details.`);
+        }
+
+        const finishProcessing = (resultPtr) => {
+          // 5. Convert the result pointers (char*) back to JS strings.
+          let resultString = readStringFromHeap(resultPtr);
+          let mimeTypeString = readStringFromHeap(mimeTypePtr);
+
+          // 6. Free the result pointer itself, which was allocated by the C code.
+          wasm_free(resultPtr);
+
+          // 7. Handle the plain text case, if needed.
+          if (buildPlainText && mimeTypeString === 'text/plain') {
+            resultString = resultString.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            resultString = `<html xmlns="http://www.w3.org/1999/xhtml">\n<head><title></title></head>\n<body>\n<pre>${resultString}</pre>\n</body>\n</html>`;
+            mimeTypeString = 'application/xml';
           }
 
-          // 2. Allocate memory for parameter strings and the pointer array in the Wasm heap.
-          if (paramsArray.length > 0) {
-              // Allocate memory for the array of pointers (char**), plus a NULL terminator.
-              const ptrSize = 4; // Pointers are 32-bit in wasm32
-              paramsPtr = WasmModule._malloc((paramsArray.length + 1) * ptrSize);
-              if (!paramsPtr) throw new Error("Wasm malloc failed for params pointer array.");
-
-              // Allocate memory for each string, write it to the heap, and store its pointer.
-              paramsArray.forEach((str, i) => {
-                  const strPtr = writeStringToHeap(str);
-                  paramStringPtrs.push(strPtr); // Track for later cleanup.
-                  // Write the pointer to the string into the paramsPtr array.
-                  new DataView(WasmModule.wasmMemory.buffer).setUint32(paramsPtr + i * ptrSize, strPtr, true);
-              });
-
-              // Null-terminate the array of pointers.
-              new DataView(WasmModule.wasmMemory.buffer).setUint32(paramsPtr + paramsArray.length * ptrSize, 0, true);
-          }
-
-          // 3. Allocate memory for XML and XSLT content.
-          const xmlBytes = (xmlContent instanceof Uint8Array) ? xmlContent : textEncoder.encode(xmlContent);
-          const xsltBytes = (xsltContent instanceof Uint8Array) ? xsltContent : textEncoder.encode(xsltContent);
-          xmlPtr = writeBytesToHeap(xmlBytes);
-          xsltPtr = writeBytesToHeap(xsltBytes);
-          xsltUrlPtr = writeStringToHeap(xsltUrl);
-          
-          // Allocate memory for the output mime type (minimum 32 bytes).
-          mimeTypePtr = WasmModule._malloc(32);
-          if (!mimeTypePtr) throw new Error("Wasm malloc failed for mimeType pointer.");
-          new Uint8Array(WasmModule.wasmMemory.buffer, mimeTypePtr, 32).fill(0);
-
-
-          // 4. Call the C function with pointers to the data in Wasm memory.
-          const resultPtr_or_Promise = wasm_transform(xmlPtr, xmlBytes.byteLength, xsltPtr, xsltBytes.byteLength, paramsPtr, xsltUrlPtr, mimeTypePtr);
-          if (!resultPtr_or_Promise) {
-              throw new Error(`XSLT Transformation failed. See console for details.`);
-          }
-
-          const finishProcessing = (resultPtr) => {
-            // 5. Convert the result pointers (char*) back to JS strings.
-            let resultString = readStringFromHeap(resultPtr);
-            let mimeTypeString = readStringFromHeap(mimeTypePtr);
-
-            // 6. Free the result pointer itself, which was allocated by the C code.
-            wasm_free(resultPtr);
-
-            // 7. Handle the plain text case, if needed.
-            if (buildPlainText && mimeTypeString === 'text/plain') {
-              resultString = resultString.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-              resultString = `<html xmlns="http://www.w3.org/1999/xhtml">\n<head><title></title></head>\n<body>\n<pre>${resultString}</pre>\n</body>\n</html>`;
-              mimeTypeString = 'application/xml';
-            }
-            return {
-                content: resultString,
-                mimeType: mimeTypeString
-            };
+          return {
+            content: resultString,
+            mimeType: mimeTypeString,
           };
+        };
 
-          if (resultPtr_or_Promise instanceof Promise) {
-            if (!allowAsync) {
-              resultPtr_or_Promise.then((resultPtr) => {
-                finishProcessing(resultPtr);
-                showError('This XSLT transformation contains includes. These aren\'t supported for synchronous XSLTProcessor methods.');
-              });
-              return { content: '', mimeType: 'application/xml' };
-            }
-            // Return a Promise that resolves to the finished object
-            return resultPtr_or_Promise.then(resultPtr => finishProcessing(resultPtr));
-          }
-          // Not a promise - just return the finished object.
-          return finishProcessing(resultPtr_or_Promise);
-      } finally {
-          // 7. Clean up all allocated memory to prevent memory leaks in the Wasm heap.
-          if (xmlPtr) wasm_free(xmlPtr);
-          if (xsltPtr) wasm_free(xsltPtr);
-          if (xsltUrlPtr) wasm_free(xsltUrlPtr);
-          if (mimeTypePtr) wasm_free(mimeTypePtr);
-          paramStringPtrs.forEach(ptr => wasm_free(ptr));
-          if (paramsPtr) wasm_free(paramsPtr);
+        if (resultPtr_or_Promise instanceof Promise) {
+          // Return a Promise that resolves to the finished object
+          return resultPtr_or_Promise.then((resultPtr) => {
+            const res = finishProcessing(resultPtr);
+            cleanup();
+            return res;
+          });
+        }
+        // Not a promise - just return the finished object.
+        const res = finishProcessing(resultPtr_or_Promise);
+        cleanup();
+        return res;
+      } catch (e) {
+        cleanup();
+        throw e;
       }
     }
 
     function isEmptySourceDocument(source) {
       return source && source.nodeType === Node.DOCUMENT_NODE && !source.documentElement;
+    }
+
+    function lowercaseHtmlAttributes(root) {
+      if (!root) return;
+      const elements = root.querySelectorAll('*');
+      for (let i = 0; i < elements.length; i++) {
+        const el = elements[i];
+        if (el.namespaceURI === 'http://www.w3.org/1999/xhtml') {
+          const attrs = el.getAttributeNames();
+          for (let j = 0; j < attrs.length; j++) {
+            const attr = attrs[j];
+            const lowerAttr = attr.toLowerCase();
+            if (attr !== lowerAttr) {
+              const val = el.getAttribute(attr);
+              el.removeAttribute(attr);
+              el.setAttribute(lowerAttr, val);
+            }
+          }
+        }
+      }
     }
 
     class XSLTProcessor {
@@ -275,34 +354,48 @@
       }
 
       importStylesheet(stylesheet) {
-        this.#stylesheetText = (new XMLSerializer()).serializeToString(stylesheet);
+        this.#stylesheetText = new XMLSerializer().serializeToString(stylesheet);
         this.#stylesheetBaseUrl = stylesheet.baseURI || window.location.href;
       }
 
       // Returns a new document (XML or HTML).
       transformToDocument(source) {
         if (!this.#stylesheetText) {
-            throw new Error("XSLTProcessor: Stylesheet not imported.");
+          throw new Error('XSLTProcessor: Stylesheet not imported.');
         }
         if (isEmptySourceDocument(source)) {
           return null;
         }
-        const sourceXml = (new XMLSerializer()).serializeToString(source);
-        const {content, mimeType} = transformXmlWithXslt(sourceXml, this.#stylesheetText, this.#parameters, this.#stylesheetBaseUrl, /*allowAsync*/false, /*buildPlainText*/true);
-        return (new DOMParser()).parseFromString(content, mimeType);
+        const sourceXml = new XMLSerializer().serializeToString(source);
+        const { content, mimeType } = transformXmlWithXslt(
+          sourceXml,
+          this.#stylesheetText,
+          this.#parameters,
+          this.#stylesheetBaseUrl,
+          /*allowAsync*/ false,
+          /*buildPlainText*/ true,
+        );
+        return new DOMParser().parseFromString(content, mimeType);
       }
 
       // Returns a fragment. In the case of HTML, head/body are flattened.
       // For text output, no <pre> is generated.
       transformToFragment(source, document) {
         if (!this.#stylesheetText) {
-            throw new Error("XSLTProcessor: Stylesheet not imported.");
+          throw new Error('XSLTProcessor: Stylesheet not imported.');
         }
         if (isEmptySourceDocument(source)) {
           return null;
         }
-        const sourceXml = (new XMLSerializer()).serializeToString(source);
-        const {content, mimeType} = transformXmlWithXslt(sourceXml, this.#stylesheetText, this.#parameters, this.#stylesheetBaseUrl, /*allowAsync*/false, /*buildPlainText*/false);
+        const sourceXml = new XMLSerializer().serializeToString(source);
+        const { content, mimeType } = transformXmlWithXslt(
+          sourceXml,
+          this.#stylesheetText,
+          this.#parameters,
+          this.#stylesheetBaseUrl,
+          /*allowAsync*/ false,
+          /*buildPlainText*/ false,
+        );
         const fragment = document.createDocumentFragment();
         switch (mimeType) {
           case 'text/plain':
@@ -312,14 +405,19 @@
             // It's legal for XML content to contain multiple sibling root
             // elements in transformToFragment, so wrap the content in one.
             const fakeRoot = `rootelementforparsing`;
-            const doc = (new DOMParser()).parseFromString(`<${fakeRoot}>${content}</${fakeRoot}>`, mimeType);
-            fragment.append(...doc.querySelector(fakeRoot).childNodes);
+            const ns = document instanceof HTMLDocument ? ` xmlns="http://www.w3.org/1999/xhtml"` : '';
+            const doc = new DOMParser().parseFromString(`<${fakeRoot}${ns}>${content}</${fakeRoot}>`, mimeType);
+            const rootNode = doc.querySelector(fakeRoot);
+            if (document instanceof HTMLDocument) {
+              lowercaseHtmlAttributes(rootNode);
+            }
+            fragment.append(...rootNode.childNodes);
             return fragment;
           }
           case 'text/html': {
             // The transformToFragment method flattens head/body into a flat list.
             // Note this comment: https://source.chromium.org/chromium/chromium/src/+/main:third_party/blink/renderer/core/editing/serializers/serialization.cc;l=776;drc=7666bc1983c2a5b98e5dc6fa6c28f8f53c07d06f
-            const doc = (new DOMParser()).parseFromString(content, mimeType);
+            const doc = new DOMParser().parseFromString(content, mimeType);
             const html = doc.firstElementChild instanceof HTMLHtmlElement ? doc.firstElementChild : undefined;
             const head = html?.firstElementChild;
             const body = head?.nextElementSibling;
@@ -371,26 +469,32 @@
     window.XSLTProcessor = XSLTProcessor;
     window.xsltPolyfillReady = xsltPolyfillReady;
 
-    // Finally, initialize the Wasm module.
-    let WasmModule = null;
-    let wasm_transform = null;
-    let wasm_free = null;
-
-    createXSLTTransformModule()
-    .then(Module => {
-        WasmModule = Module;
-        wasm_transform = Module.cwrap('transform', 'number', ['number', 'number', 'number', 'number', 'number', 'number', 'number'], { async: false });
-        wasm_free = Module._free;
-
-        // Tell people we're ready.
-        polyfillReadyPromiseResolve();
-    }).catch(err => {
-        console.error("Error loading XSLT Wasm module:", err);
-        polyfillReadyPromiseReject(err);
-    });
-
     function absoluteUrl(url) {
       return new URL(url, window.location.href).href;
+    }
+
+    function startSpinner() {
+      const blackout = document.createElement('div');
+      blackout.style.position = 'fixed';
+      blackout.style.display = 'flex';
+      blackout.style.alignItems = 'center';
+      blackout.style.justifyContent = 'center';
+      blackout.style.left = 0;
+      blackout.style.top = 0;
+      blackout.style.width = '100vw';
+      blackout.style.height = '100vh';
+      blackout.style.background = 'none';
+      blackout.style.backdropFilter = 'blur(5px) brightness(60%) saturate(150%)';
+      const spinner = document.createElement('div');
+      spinner.style.display = 'inline-block';
+      spinner.style.width = '3rem';
+      spinner.style.height = '3rem';
+      spinner.style.border = '5px solid rgba(0,0,0,.3)';
+      spinner.style.borderRadius = '50%';
+      spinner.style.borderTopColor = 'rgb(0,0,0)';
+      blackout.appendChild(spinner);
+      document.documentElement.appendChild(blackout);
+      spinner.animate([{transform: 'rotate(0deg)'},{transform: 'rotate(360deg)'}],{duration: 1000, iterations: Infinity});
     }
 
     async function loadXmlWithXsltFromBytes(xmlBytes, xmlUrl) {
@@ -399,7 +503,7 @@
       // We decode only a small chunk at the beginning for safety and performance.
       const decoder = new TextDecoder();
       const xmlTextChunk = decoder.decode(xmlBytes.subarray(0, 2048));
-  
+
       let xsltPath = null;
       const piMatch = xmlTextChunk.match(/<\?xml-stylesheet\s+([^>]*?)\?>/);
       if (piMatch) {
@@ -408,7 +512,12 @@
         const typeMatch = piData.match(/type\s*=\s*(["'])(.*?)\1/)?.[2]?.toLowerCase();
         if (hrefMatch && (typeMatch === 'text/xsl' || typeMatch === 'application/xslt+xml')) {
           // Decode HTML entities from the path.
-          xsltPath = hrefMatch.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, '\'').replace(/&amp;/g, '&');
+          xsltPath = hrefMatch
+            .replace(/&lt;/g, '<')
+            .replace(/&gt;/g, '>')
+            .replace(/&quot;/g, '"')
+            .replace(/&apos;/g, "'")
+            .replace(/&amp;/g, '&');
         }
       }
 
@@ -417,7 +526,7 @@
         console.warn(`XSLT Polyfill: No XSLT processing instruction found in ${xmlUrl}`);
         return;
       }
-
+      startSpinner();
       // Fetch the XSLT file, resolving its path relative to the XML file's URL.
       const xsltUrl = new URL(xsltPath, xmlUrl);
       const xsltDoc = await loadDoc(xsltUrl.href, 'default');
@@ -425,28 +534,34 @@
         return showError(`Failed to fetch XSLT file: ${xsltUrl.href}`);
       }
 
-      // We need to clone the node because compileImports is destructive.
-      const xsltDocClone = xsltDoc.cloneNode(true);
-      const compiledXsltDoc = await compileImports(xsltDocClone, xsltUrl.href);
+      // Compile imports. This inlines them into the stylesheet document.
+      const compiledXsltDoc = await compileImports(xsltDoc, xsltUrl.href);
       const compiledXsltText = new XMLSerializer().serializeToString(compiledXsltDoc);
 
       // Process XML/XSLT and replace the document.
       try {
-        const {content, mimeType} = await transformXmlWithXslt(xmlBytes, compiledXsltText, null, xsltUrl.href, /*allowAsync*/true, /*buildPlainText*/true);
+        const { content, mimeType } = await transformXmlWithXslt(
+          xmlBytes,
+          compiledXsltText,
+          null,
+          xsltUrl.href,
+          /*allowAsync*/ true,
+          /*buildPlainText*/ true,
+        );
         // Replace the document with the result
         replaceDoc(content, mimeType);
       } catch (e) {
         return showError(`Error processing XML/XSLT: ${e}`);
-      }      
+      }
     }
 
     // Replace the current document with the provided HTML.
     function replaceDoc(newHTML, mimeType) {
-      if (typeof newHTML !== 'string' ) {
+      if (typeof newHTML !== 'string') {
         return showError('newHTML should be a string');
       }
       if (document instanceof XMLDocument) {
-        const htmlRoot = document.createElementNS("http://www.w3.org/1999/xhtml","html");
+        const htmlRoot = document.createElementNS('http://www.w3.org/1999/xhtml', 'html');
         document.documentElement.replaceWith(htmlRoot);
         unsafeReplaceDocumentWithHtml(htmlRoot, newHTML, mimeType);
       } else if (document instanceof HTMLDocument) {
@@ -463,17 +578,51 @@
         mimeType = 'text/html';
       }
       // First parse the document and move content to a fragment.
-      const parsedDoc = (new DOMParser()).parseFromString(htmlString, mimeType || 'text/html');
+      let root, parsedDoc;
+      if (mimeType === 'application/xml' && document instanceof HTMLDocument) {
+        const fakeRoot = `rootelementforparsing`;
+        parsedDoc = new DOMParser().parseFromString(
+          `<${fakeRoot} xmlns="http://www.w3.org/1999/xhtml">${htmlString}</${fakeRoot}>`,
+          mimeType,
+        );
+        root = parsedDoc.querySelector(fakeRoot);
+        lowercaseHtmlAttributes(root);
+      } else {
+        parsedDoc = new DOMParser().parseFromString(htmlString, mimeType || 'text/html');
+        root = parsedDoc.documentElement;
+      }
       const fragment = document.createDocumentFragment();
-      fragment.append(...parsedDoc.documentElement.childNodes);
+      if (root) {
+        fragment.append(...root.childNodes);
+      }
       // Scripts need to be re-created, so they will execute:
       const scripts = fragment.querySelectorAll('script');
-      const textArea = document.createElementNS('http://www.w3.org/1999/xhtml','textarea');
+      const textArea = document.createElementNS('http://www.w3.org/1999/xhtml', 'textarea');
+      let pendingScripts = 0;
+      let contentInserted = false;
+      let eventsFired = false;
+      const dispatchEvents = () => {
+        if (eventsFired || !contentInserted || pendingScripts > 0) {
+          return;
+        }
+        eventsFired = true;
+        document.dispatchEvent(new Event('DOMContentLoaded', { bubbles: true, cancelable: true }));
+        window.dispatchEvent(new Event('load', { bubbles: false, cancelable: false }));
+      };
+      const onScriptDone = () => {
+        --pendingScripts;
+        dispatchEvents();
+      };
       scripts.forEach((oldScript) => {
-        const newScript = document.createElementNS('http://www.w3.org/1999/xhtml','script');
+        const newScript = document.createElementNS('http://www.w3.org/1999/xhtml', 'script');
         Array.from(oldScript.attributes).forEach((attr) => {
           newScript.setAttribute(attr.name, attr.value);
         });
+        if (newScript.hasAttribute('src')) {
+          ++pendingScripts;
+          newScript.addEventListener('load', onScriptDone);
+          newScript.addEventListener('error', onScriptDone);
+        }
         // Because the original XSLT doc is serialized with
         // `XMLSerializer().serializeToString(compiledXsltDoc)` above, the
         // contents of the script will have been treated as XML children of the
@@ -487,9 +636,6 @@
         textArea.setHTMLUnsafe(oldScript.textContent);
         newScript.textContent = textArea.value;
         oldScript.parentNode.replaceChild(newScript, oldScript);
-        newScript.addEventListener('load',() => 
-          window.dispatchEvent(new CustomEvent('scriptsloaded', {bubbles: false, cancelable: false}))
-        );
       });
       // The html element could have attributes - copy them.
       if (targetElement instanceof HTMLHtmlElement) {
@@ -498,22 +644,16 @@
         }
       }
       targetElement.replaceChildren(fragment);
+      contentInserted = true;
       // Since all of the scripts above will run after the document load, we
-      // fire a synthetic one, to make sure `addEventListener('load')` works.
-      if(scripts.length > 0) {
-        let numloaded = 0;
-        window.addEventListener('scriptsloaded', () => {
-          numloaded = numloaded + 1;
-          if(numloaded === scripts.length)
-            window.dispatchEvent(new CustomEvent('load', {bubbles: false, cancelable: false}));
-        });
-      }
+      // fire synthetic ones, to make sure 'load' and 'DOMContentLoaded' work.
+      setTimeout(dispatchEvents, 0);
     }
 
     // If we're polyfilling, we need to patch `document.createElement()`, because
     // that will create XML elements in the (still) XML document.
     const _originalCreateElement = document.createElement;
-    document.createElement = function(tagName, options) {
+    document.createElement = function (tagName, options) {
       if (document instanceof XMLDocument) {
         const el = document.createElementNS('http://www.w3.org/1999/xhtml', tagName.toLowerCase());
         if (options && options.is) {
@@ -536,7 +676,6 @@
 
     window.parseAndReplaceCurrentXMLDoc = parseAndReplaceCurrentXMLDoc;
     window.loadXmlWithXsltFromBytes = loadXmlWithXsltFromBytes;
-
   } // if (polyfillWillLoad)
 
   // Replace the current document with the provided error message.
@@ -546,16 +685,20 @@
   }
 
   if (!nativeSupported && document instanceof XMLDocument && !xsltDontAutoloadXmlDocs) {
-    if (document.readyState === "loading") {
-      document.addEventListener("DOMContentLoaded", () => {
-        parseAndReplaceCurrentXMLDoc(document);
-      });
+    if (document.readyState === 'loading') {
+      document.addEventListener(
+        'DOMContentLoaded',
+        () => {
+          parseAndReplaceCurrentXMLDoc(document);
+        },
+        { once: true },
+      );
     } else {
       parseAndReplaceCurrentXMLDoc(document);
     }
   }
 
   if (!window.xsltPolyfillQuiet) {
-    console.log(`XSLT polyfill ${!polyfillWillLoad ? "NOT " : ""}installed (native supported: ${nativeSupported}).`);
+    console.log(`XSLT polyfill ${!polyfillWillLoad ? 'NOT ' : ''}installed (native supported: ${nativeSupported}).`);
   }
 })();
