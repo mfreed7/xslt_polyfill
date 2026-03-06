@@ -746,6 +746,111 @@ const testCases = [
           </xsl:template>
         </xsl:stylesheet>`,
   },
+  {
+    name: 'Performance: Split Benchmarks',
+    html: `
+        <!DOCTYPE html>
+        <body>
+        {{SCRIPT_INJECTION_LOCATION}}
+        <div id="target" style="color:red">INIT</div>
+        <script>
+        window.onload = () => {
+            const items = 500;
+            const largeWit = Array.from({length: items}, (_, i) => '#w' + i).join(' ');
+            const xml = \`<?xml version="1.0" encoding="utf-8"?>
+                <page><item wit="\${largeWit}" /></page>\`;
+            const xsl = \`<xsl:stylesheet version="1.0"
+                    xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+                    xmlns:str="http://exslt.org/strings"
+                    extension-element-prefixes="str">
+                <xsl:output method="html"/>
+                <xsl:template match="/">
+                    <div id="result">
+                        <div id="recursive">
+                            <xsl:apply-templates select="//item" mode="recursive"/>
+                        </div>
+                        <div id="exslt">
+                            <xsl:apply-templates select="//item" mode="exslt"/>
+                        </div>
+                    </div>
+                </xsl:template>
+
+                <!-- Case 1: Recursive Split -->
+                <xsl:template match="item" mode="recursive">
+                    <xsl:call-template name="splitwit">
+                        <xsl:with-param name="corresp" select="'some-corresp'"/>
+                    </xsl:call-template>
+                </xsl:template>
+
+                <xsl:template name="splitwit">
+                  <xsl:param name="mss">
+                    <xsl:choose>
+                      <xsl:when test=" @wit"><xsl:value-of select="concat( @wit,' ')"/></xsl:when>
+                      <xsl:when test=" @select"><xsl:value-of select="concat( @select,' ')"/></xsl:when>
+                      <xsl:otherwise/>
+                    </xsl:choose>
+                  </xsl:param>
+                  <xsl:param name="rdggrp" select="local-name() = 'rdgGrp'"/>
+                  <xsl:param name="corresp"/>
+                  <xsl:call-template name="splitloop">
+                    <xsl:with-param name="rdggrp" select="\$rdggrp"/>
+                    <xsl:with-param name="corresp" select="\$corresp"/>
+                    <xsl:with-param name="thisms" select="substring-before(\$mss,' ')"/>
+                  </xsl:call-template>
+                  <xsl:variable name="nextstr" select="substring-after(\$mss, ' ')"/>
+                  <xsl:if test="\$nextstr != ''">
+                    <xsl:text>&#x200B;</xsl:text>
+                    <xsl:call-template name="splitwit">
+                      <xsl:with-param name="mss" select="\$nextstr"/>
+                      <xsl:with-param name="corresp" select="\$corresp"/>
+                    </xsl:call-template>
+                  </xsl:if>
+                </xsl:template>
+
+                <!-- Case 2: str:split -->
+                <xsl:template match="item" mode="exslt">
+                    <xsl:call-template name="splitwit2">
+                        <xsl:with-param name="corresp" select="'some-corresp'"/>
+                        <xsl:with-param name="mss" select="string(@wit)"/>
+                    </xsl:call-template>
+                </xsl:template>
+
+                <xsl:template name="splitwit2">
+                  <xsl:param name="mss" select=" @wit | @select"/>
+                  <xsl:param name="rdggrp" select="local-name() = 'rdgGrp'"/>
+                  <xsl:param name="corresp"/>
+                  <xsl:for-each select="str:split(\$mss,' ')">
+                    <xsl:call-template name="splitloop">
+                      <xsl:with-param name="rdggrp" select="\$rdggrp"/>
+                      <xsl:with-param name="corresp" select="\$corresp"/>
+                    </xsl:call-template>
+                    <xsl:if test="position() != last()">
+                      <xsl:text>&#x200B;</xsl:text>
+                    </xsl:if>
+                  </xsl:for-each>
+                </xsl:template>
+
+                <xsl:template name="splitloop">
+                  <xsl:param name="thisms" select="."/>
+                  <span><xsl:value-of select="\$thisms"/></span>
+                </xsl:template>
+                </xsl:stylesheet>\`;
+            ${UTILITIES}
+            let passed = true;
+            for(let repeats=0; repeats<100; ++repeats) {
+              const {xsltProcessor,xmlDoc} = initProcessor(xml,xsl);
+              const fragment = xsltProcessor.transformToFragment(xmlDoc, document);
+              const recursiveSpans = fragment.querySelector('#recursive').querySelectorAll('span');
+              const exsltSpans = fragment.querySelector('#exslt').querySelectorAll('span');
+              const recursivePassed = recursiveSpans.length === items && recursiveSpans[0].textContent === '#w0';
+              const exsltPassed = exsltSpans.length === items && exsltSpans[0].textContent === '#w0';
+              passed = passed && recursivePassed && exsltPassed;
+            }
+            setResult(passed);
+        };
+        </script>
+        </body>`,
+  },
 ];
 
 const fs = require('fs');
