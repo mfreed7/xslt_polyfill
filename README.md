@@ -82,7 +82,10 @@ standards-compliant XSLT 1.0 engine.
   document's content with the result.
 - **Resource Fetching**: All external resources, including the XSLT itself and
   any files referenced via `<xsl:import>`, `<xsl:include>`, or `document()`, are
-  fetched using the `fetch()` API and are thus subject to CORS.
+  fetched using the `fetch()` API and are thus subject to CORS. The source
+  document is re-fetched to ensure the WebAssembly engine receives the clean,
+  original byte stream, avoiding any modifications or tag stripping introduced
+  by the browser's initial XML parsing.
 - **Script Execution**: To ensure functionality in the transformed output, the
   polyfill manually re-creates and executes `<script>` elements and fires
   synthetic `DOMContentLoaded` and `load` events.
