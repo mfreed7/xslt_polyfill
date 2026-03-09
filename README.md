@@ -64,8 +64,34 @@ xsltProcessor.transformToFragment(xmlDoc, document);
 The example above is available in the `test/` folder of this repo:
 [`XSLTProcessor_example.html`](https://github.com/mfreed7/xslt_polyfill/blob/main/test/XSLTProcessor_example.html).
 
+## Implementation
 
-### Limitations
+The polyfill is powered by a WebAssembly port of the
+[libxslt](https://gitlab.gnome.org/GNOME/libxslt) and
+[libxml2](https://gitlab.gnome.org/GNOME/libxml2) C libraries, providing a
+standards-compliant XSLT 1.0 engine.
+
+- **XSLTProcessor Polyfill**: Implements the full `XSLTProcessor` API, including
+  `importStylesheet`, `transformToDocument`, `transformToFragment`, and
+  parameter management.
+- **Automatic Transformation**: When included via a `<script>` tag in an XML
+  document (and provided the `<script>` has
+  `xmlns="http://www.w3.org/1999/xhtml"`), the polyfill automatically detects
+  `<?xml-stylesheet?>` processing instructions. It fetches the linked XSLT,
+  re-fetches the source document, performs the transformation, and replaces the
+  document's content with the result.
+- **Resource Fetching**: All external resources, including the XSLT itself and
+  any files referenced via `<xsl:import>`, `<xsl:include>`, or `document()`, are
+  fetched using the `fetch()` API and are thus subject to CORS.
+- **Script Execution**: To ensure functionality in the transformed output, the
+  polyfill manually re-creates and executes `<script>` elements and fires
+  synthetic `DOMContentLoaded` and `load` events.
+- **MIME Types & Namespaces**: Stylesheets must use `type="text/xsl"` or
+  `type="application/xslt+xml"`. Because the underlying document remains an
+  XML/XHTML document, the polyfill monkey-patches `document.createElement` to
+  ensure new elements are created in the XHTML namespace.
+
+## Limitations
 
 Note that as of now, there are a few things that don't work perfectly:
  - You'll need to be running the polyfill in a browser with the native XSLT
