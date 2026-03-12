@@ -214,15 +214,13 @@
 
       try {
         // 1. Prepare parameters from the Map into a flat array.
-        // libxslt expects string values to be XPath expressions, so simple strings
-        // must be enclosed in quotes.
+        // Values are passed as raw strings; xsltQuoteUserParams on the C side
+        // handles quoting so that any character is treated as a literal string.
         const paramsArray = [];
         if (parameters) {
           for (const [key, value] of parameters.entries()) {
             paramsArray.push(key);
-            // Wrap value in single quotes for libxslt.
-            // Basic escaping for values containing single quotes is not handled here.
-            paramsArray.push(`'${String(value)}'`);
+            paramsArray.push(String(value));
           }
         }
 

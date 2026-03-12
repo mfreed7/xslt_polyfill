@@ -747,6 +747,53 @@ const testCases = [
         </xsl:stylesheet>`,
   },
   {
+    name: 'setParameter with special characters',
+    html: `
+        <!DOCTYPE html>
+        <body>
+        {{SCRIPT_INJECTION_LOCATION}}
+        <div id="target" style="color:red">INIT</div>
+        <script>
+        ${UTILITIES}
+        window.onload = () => {
+            const xml = \`<?xml version="1.0" encoding="utf-8"?><root/>\`;
+            const xsl = \`<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+                <xsl:output method="html"/>
+                <xsl:param name="p1"/>
+                <xsl:param name="p2"/>
+                <xsl:param name="p3"/>
+                <xsl:param name="p4"/>
+                <xsl:template match="/">
+                    <div id="r1"><xsl:value-of select="$p1"/></div>
+                    <div id="r2"><xsl:value-of select="$p2"/></div>
+                    <div id="r3"><xsl:value-of select="$p3"/></div>
+                    <div id="r4"><xsl:value-of select="$p4"/></div>
+                </xsl:template>
+            </xsl:stylesheet>\`;
+            const parser = new window.DOMParser();
+            const xmlDoc = parser.parseFromString(xml, "application/xml");
+            const xslDoc = parser.parseFromString(xsl, "application/xml");
+            const xsltProcessor = new window.XSLTProcessor();
+            xsltProcessor.importStylesheet(xslDoc);
+            xsltProcessor.setParameter(null, 'p1', "O'Brien");
+            xsltProcessor.setParameter(null, 'p2', 'say "hello"');
+            xsltProcessor.setParameter(null, 'p3', "it's a \\"test\\"");
+            xsltProcessor.setParameter(null, 'p4', 'normal');
+            const frag = xsltProcessor.transformToFragment(xmlDoc, document);
+            const r1 = frag?.querySelector('#r1')?.textContent;
+            const r2 = frag?.querySelector('#r2')?.textContent;
+            const r3 = frag?.querySelector('#r3')?.textContent;
+            const r4 = frag?.querySelector('#r4')?.textContent;
+            const passed = r1 === "O'Brien" &&
+                           r2 === 'say "hello"' &&
+                           r3 === "it's a \\"test\\"" &&
+                           r4 === 'normal';
+            setResult(passed, \`r1=\${r1}, r2=\${r2}, r3=\${r3}, r4=\${r4}\`);
+        };
+        </script>
+        </body>`,
+  },
+  {
     name: 'getParameter returns falsy values',
     html: `
         <!DOCTYPE html>
