@@ -29,7 +29,7 @@
     "test": "node run-tests.js"
   },
   "type": "commonjs",
-  "dependencies": {
+  "devDependencies": {
     "puppeteer": "^24.37.5"
   }
 }
