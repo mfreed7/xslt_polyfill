@@ -443,7 +443,7 @@
       }
 
       getParameter(namespaceURI, localName) {
-        return this.#parameters.get(localName) || null;
+        return this.#parameters.has(localName) ? this.#parameters.get(localName) : null;
       }
 
       removeParameter(namespaceURI, localName) {

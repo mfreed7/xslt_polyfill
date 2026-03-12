@@ -747,6 +747,40 @@ const testCases = [
         </xsl:stylesheet>`,
   },
   {
+    name: 'getParameter returns falsy values',
+    html: `
+        <!DOCTYPE html>
+        <body>
+        {{SCRIPT_INJECTION_LOCATION}}
+        <div id="target" style="color:green">INIT</div>
+        <script>
+        ${UTILITIES}
+        window.onload = () => {
+            const xsltProcessor = new window.XSLTProcessor();
+
+            xsltProcessor.setParameter(null, 'emptyString', '');
+            xsltProcessor.setParameter(null, 'zero', 0);
+            xsltProcessor.setParameter(null, 'falseVal', false);
+
+            const emptyString = xsltProcessor.getParameter(null, 'emptyString');
+            const zero = xsltProcessor.getParameter(null, 'zero');
+            const falseVal = xsltProcessor.getParameter(null, 'falseVal');
+            const unset = xsltProcessor.getParameter(null, 'unset');
+
+            xsltProcessor.removeParameter(null, 'emptyString');
+            const removed = xsltProcessor.getParameter(null, 'emptyString');
+
+            const passed = emptyString === '' &&
+                           zero === 0 &&
+                           falseVal === false &&
+                           unset === null &&
+                           removed === null;
+            setResult(passed, \`emptyString=\${emptyString}, zero=\${zero}, falseVal=\${falseVal}, unset=\${unset}, removed=\${removed}\`);
+        };
+        </script>
+        </body>`,
+  },
+  {
     name: 'Performance: Split Benchmarks',
     html: `
         <!DOCTYPE html>
