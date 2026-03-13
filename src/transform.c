@@ -18,6 +18,7 @@
 #include <libxslt/transform.h>
 #include <libxslt/xslt.h>
 #include <libxslt/xsltInternals.h>
+#include <libxslt/variables.h>
 #include <libxslt/xsltutils.h>
 
 // Forward declaration for our JS fetch function.
@@ -630,8 +631,16 @@ char *transform(const char *xml_content, int xml_len, const char *xslt_content,
   }
 
   // 5. Apply the transformation using the configured context and parameters.
+  // xsltQuoteUserParams treats values as literal strings rather than XPath
+  // expressions, so values containing single quotes are handled correctly.
+  if (params != NULL) {
+    if (xsltQuoteUserParams(ctxt, params) != 0) {
+      printf("XSLT Transformation Error: Failed to set user parameters.\n");
+      goto cleanup;
+    }
+  }
   result_doc = xsltApplyStylesheetUser(xslt_sheet, xml_doc,
-                                       (const char **)params, NULL, NULL, ctxt);
+                                       NULL, NULL, NULL, ctxt);
   if (result_doc == NULL) {
     printf("XSLT Transformation Error: Failed to apply stylesheet to XML "
            "document (see console logs).\n");
