@@ -121,15 +121,16 @@
 
         const importedDocRoot = importedDoc.documentElement;
         const xsltDocRoot = xsltsheet.documentElement;
-        const attrs = importedDocRoot.getAttributeNames();
-        for (const attr of attrs) {
-          if (!xsltDocRoot.getAttribute(attr)) {
-            xsltDocRoot.setAttribute(attr, importedDocRoot.getAttribute(attr));
-          }
-        }
-
+        
         // Recursively compile imports within the imported document.
         await compileImports(importedDoc, href);
+
+        const attrs = importedDocRoot.attributes;
+        for (const attr of attrs) {
+          if (!xsltDocRoot.getAttributeNS(attr.namespaceURI,attr.localName)) {
+            xsltDocRoot.setAttributeNS(attr.namespaceURI, attr.name, attr.value);
+          }
+        }
 
         // Move all children from the imported document to the main document.
         // Special case: skip duplicate parameters if they were already merged.
@@ -470,6 +471,30 @@
       return new URL(url, window.location.href).href;
     }
 
+    function startSpinner() {
+      const blackout = document.createElement('div');
+      blackout.style.position = 'fixed';
+      blackout.style.display = 'flex';
+      blackout.style.alignItems = 'center';
+      blackout.style.justifyContent = 'center';
+      blackout.style.left = 0;
+      blackout.style.top = 0;
+      blackout.style.width = '100vw';
+      blackout.style.height = '100vh';
+      blackout.style.background = 'none';
+      blackout.style.backdropFilter = 'blur(5px) brightness(60%) saturate(150%)';
+      const spinner = document.createElement('div');
+      spinner.style.display = 'inline-block';
+      spinner.style.width = '3rem';
+      spinner.style.height = '3rem';
+      spinner.style.border = '5px solid rgba(0,0,0,.3)';
+      spinner.style.borderRadius = '50%';
+      spinner.style.borderTopColor = 'rgb(0,0,0)';
+      blackout.appendChild(spinner);
+      document.documentElement.appendChild(blackout);
+      spinner.animate([{transform: 'rotate(0deg)'},{transform: 'rotate(360deg)'}],{duration: 1000, iterations: Infinity});
+    }
+
     async function loadXmlWithXsltFromBytes(xmlBytes, xmlUrl) {
       xmlUrl = absoluteUrl(xmlUrl);
       // Look inside XML file for a processing instruction with an XSLT file.
@@ -499,7 +524,7 @@
         console.warn(`XSLT Polyfill: No XSLT processing instruction found in ${xmlUrl}`);
         return;
       }
-
+      startSpinner();
       // Fetch the XSLT file, resolving its path relative to the XML file's URL.
       const xsltUrl = new URL(xsltPath, xmlUrl);
       const xsltDoc = await loadDoc(xsltUrl.href, 'default');
