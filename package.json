@@ -1,6 +1,6 @@
 {
   "name": "xslt-polyfill",
-  "version": "1.0.19",
+  "version": "1.0.20",
   "description": "A polyfill for browser-based XSLTProcessor and friends",
   "keywords": [
     "XSLT",
@@ -39,3 +39,4 @@
     "terser": "^5.31.0"
   }
 }
+
