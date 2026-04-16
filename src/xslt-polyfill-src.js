@@ -25,6 +25,98 @@
   });
   window.xsltUsePolyfillAlways = 'xsltUsePolyfillAlways' in window ? window.xsltUsePolyfillAlways : false;
   window.xsltDontAutoloadXmlDocs = 'xsltDontAutoloadXmlDocs' in window ? window.xsltDontAutoloadXmlDocs : false;
+  let xsltPolyfillHideRequestId = 0;
+  let currentSpinnerText = null;
+
+  if ('xsltPolyfillSpinner' in window) {
+    currentSpinnerText = window.xsltPolyfillSpinner;
+    delete window.xsltPolyfillSpinner;
+  }
+
+  function setPolyfillSpinner(text) {
+    currentSpinnerText = text;
+    if (!document.body) {
+      if (text) {
+        xsltPolyfillHideRequestId = requestAnimationFrame(() => setPolyfillSpinner(text));
+      } else {
+        cancelAnimationFrame(xsltPolyfillHideRequestId);
+      }
+      return;
+    }
+
+    cancelAnimationFrame(xsltPolyfillHideRequestId);
+
+    let overlay = document.getElementById('xslt-polyfill-spinner');
+    if (text) {
+      if (!overlay) {
+        const xmlns = 'http://www.w3.org/1999/xhtml';
+        overlay = document.createElementNS(xmlns, 'div');
+        overlay.id = 'xslt-polyfill-spinner';
+
+        const span = document.createElementNS(xmlns, 'span');
+        span.textContent = text;
+        overlay.appendChild(span);
+
+        const style = document.createElementNS(xmlns, 'style');
+        style.textContent = `
+          #xslt-polyfill-spinner {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            padding: 16px;
+            border-radius: 15px;
+            z-index: 1;
+            font-family: sans-serif;
+            visibility: visible;
+          }
+          #xslt-polyfill-spinner::after {
+            content: "";
+            position: absolute;
+            inset: 0;
+            border-radius: inherit;
+            background: #3b82f6;
+            z-index: -1;
+            animation: ripple 1.5s infinite ease-out;
+          }
+          @keyframes ripple {
+            to {
+              transform: scale(1.15, 1.4);
+              opacity: 0;
+            }
+          }`;
+        overlay.appendChild(style);
+        document.body.appendChild(overlay);
+      } else {
+        const span = overlay.querySelector('span');
+        if (span) span.textContent = text;
+      }
+      overlay.style.display = 'block';
+      document.body.style.visibility = 'hidden';
+    } else {
+      if (overlay) {
+        overlay.remove();
+      }
+      if (document.body) {
+        document.body.style.removeProperty('visibility');
+      }
+    }
+  }
+
+  Object.defineProperty(window, 'xsltPolyfillSpinner', {
+    get() {
+      return currentSpinnerText;
+    },
+    set(val) {
+      setPolyfillSpinner(val);
+    },
+    configurable: true,
+  });
+
+  if (currentSpinnerText) {
+    setPolyfillSpinner(currentSpinnerText);
+  }
+
   let nativeSupported = 'XSLTProcessor' in window && window.XSLTProcessor.toString().includes('native code');
   if (nativeSupported) {
     try {

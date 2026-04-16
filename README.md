@@ -64,6 +64,37 @@ xsltProcessor.transformToFragment(xmlDoc, document);
 The example above is available in the `test/` folder of this repo:
 [`XSLTProcessor_example.html`](https://github.com/mfreed7/xslt_polyfill/blob/main/test/XSLTProcessor_example.html).
 
+## Loading Spinner
+
+When the polyfill is used to automatically transform a page (e.g. via an
+injected `<script>` tag), it can take a moment to fetch the necessary files and
+compile the Wasm engine. To improve user experience, the polyfill can display a
+loading spinner while processing.
+
+To enable the loading spinner, you can configure the
+`window.xsltPolyfillSpinner` property before the polyfill script initializes.
+Set this property to the string you want to display to the user. When the
+transformation completes, the polyfill or your scripts can clear the spinner by
+setting it to `null`.
+
+```html
+<script xmlns="http://www.w3.org/1999/xhtml">
+  // Enable the spinner by setting the text to display
+  window.xsltPolyfillSpinner = 'Processing XSLT, please wait...';
+</script>
+<script src="../xslt-polyfill.min.js" xmlns="http://www.w3.org/1999/xhtml"></script>
+```
+
+You can also dynamically set or clear the spinner at runtime by modifying the
+property:
+```javascript
+// Show the spinner with new text
+window.xsltPolyfillSpinner = 'Updating content...';
+
+// Hide the spinner and show the document body
+window.xsltPolyfillSpinner = null;
+```
+
 ## Implementation
 
 The polyfill is powered by a WebAssembly port of the
