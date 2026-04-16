@@ -401,6 +401,7 @@ static xmlDocPtr docLoader(const xmlChar *URI, xmlDictPtr dict, int options,
 
   printf("Loading external document from URL %s...\n", url);
   const char *content = fetch_and_load_document(url);
+  printf("Done loading %s.\n", url);
 
   if (content == NULL) {
     return NULL;
