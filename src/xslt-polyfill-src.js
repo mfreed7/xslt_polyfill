@@ -593,22 +593,35 @@
         // Document, these rules persist and break the layout of the newly rendered HTML.
         // We inject a reset stylesheet at the very top of the <head> to override these UA styles,
         // allowing the author's own CSS to take precedence naturally.
-        const style = document.createElementNS('http://www.w3.org/1999/xhtml', 'style');
-        style.textContent =
-          '          html, body {\n' +
-          '            white-space: normal;\n' +
-          '            font-family: initial;\n' +
-          '            font-size: initial;\n' +
-          '            margin: 0;\n' +
-          '          }\n' +
-          '          table, tbody, thead, tfoot, tr, th, td {\n' +
-          '            white-space: normal;\n' +
-          '          }\n';
+        const resetStyles = document.createElementNS('http://www.w3.org/1999/xhtml', 'resetStyles');
+        resetStyles.textContent = `
+          table {
+            width: auto;
+            min-width: auto;
+            border-spacing: initial;
+            white-space: normal;
+            margin: initial;
+            font-size: initial;
+            font-family: initial;
+            tab-size: initial;
+          }
+          td {
+            vertical-align: initial;
+          }
+          html, body {
+            white-space: normal;
+            font-family: initial;
+            font-size: initial;
+            margin: 0;
+          }
+          tbody, thead, tfoot, tr, th {
+            white-space: normal;
+          }`;
         const head = targetElement.querySelector('head');
         if (head) {
-          head.prepend(style);
+          head.prepend(resetStyles);
         } else {
-          targetElement.prepend(style);
+          targetElement.prepend(resetStyles);
         }
       }
       (async () => {
@@ -663,6 +676,29 @@
       return _originalCreateElement.apply(document, arguments);
     };
 
+    if (document instanceof XMLDocument) {
+      const originalTagName = Object.getOwnPropertyDescriptor(Element.prototype, 'tagName').get;
+      Object.defineProperty(Element.prototype, 'tagName', {
+        get() {
+          const val = originalTagName.call(this);
+          if (this.namespaceURI === 'http://www.w3.org/1999/xhtml' && val) {
+            return val.toUpperCase();
+          }
+          return val;
+        },
+      });
+
+      const originalNodeName = Object.getOwnPropertyDescriptor(Node.prototype, 'nodeName').get;
+      Object.defineProperty(Node.prototype, 'nodeName', {
+        get() {
+          const val = originalNodeName.call(this);
+          if (this.nodeType === 1 && this.namespaceURI === 'http://www.w3.org/1999/xhtml' && val) {
+            return val.toUpperCase();
+          }
+          return val;
+        },
+      });
+    }
     function parseAndReplaceCurrentXMLDoc(doc) {
       const xml = new XMLSerializer().serializeToString(doc);
       const xmlBytes = new TextEncoder().encode(xml);
