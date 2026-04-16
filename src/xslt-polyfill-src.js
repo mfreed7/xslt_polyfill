@@ -699,6 +699,82 @@
           return val;
         },
       });
+      // Monkeypatch innerHTML, outerHTML, and insertAdjacentHTML for HTML elements in XML documents
+      let _htmlDoc = null;
+      function getHtmlContext(localName) {
+        if (!_htmlDoc) _htmlDoc = document.implementation.createHTMLDocument('');
+        return _htmlDoc.createElement(localName || 'div');
+      }
+
+      const originalInnerHTML = Object.getOwnPropertyDescriptor(Element.prototype, 'innerHTML');
+      if (originalInnerHTML) {
+        Object.defineProperty(Element.prototype, 'innerHTML', {
+          get() {
+            return originalInnerHTML.get.call(this);
+          },
+          set(value) {
+            if (this.ownerDocument instanceof XMLDocument && this.namespaceURI === 'http://www.w3.org/1999/xhtml') {
+              const ctxElement = getHtmlContext(this.localName);
+              ctxElement.innerHTML = value;
+              this.replaceChildren(...ctxElement.childNodes);
+            } else {
+              originalInnerHTML.set.call(this, value);
+            }
+          },
+        });
+      }
+
+      const originalOuterHTML = Object.getOwnPropertyDescriptor(Element.prototype, 'outerHTML');
+      if (originalOuterHTML) {
+        Object.defineProperty(Element.prototype, 'outerHTML', {
+          get() {
+            return originalOuterHTML.get.call(this);
+          },
+          set(value) {
+            if (this.ownerDocument instanceof XMLDocument && this.namespaceURI === 'http://www.w3.org/1999/xhtml') {
+              const parent = this.parentNode;
+              const ctxLocalName = parent && parent.nodeType === Node.ELEMENT_NODE ? parent.localName : 'div';
+              const ctxElement = getHtmlContext(ctxLocalName);
+              ctxElement.innerHTML = value;
+              this.replaceWith(...ctxElement.childNodes);
+            } else {
+              originalOuterHTML.set.call(this, value);
+            }
+          },
+        });
+      }
+
+      const originalInsertAdjacentHTML = Element.prototype.insertAdjacentHTML;
+      if (originalInsertAdjacentHTML) {
+        Element.prototype.insertAdjacentHTML = function (position, text) {
+          if (this.ownerDocument instanceof XMLDocument && this.namespaceURI === 'http://www.w3.org/1999/xhtml') {
+            position = position.toLowerCase();
+            let ctxLocalName = 'div';
+            if (position === 'beforebegin' || position === 'afterend') {
+              const parent = this.parentNode;
+              if (parent && parent.nodeType === Node.ELEMENT_NODE) {
+                ctxLocalName = parent.localName;
+              }
+            } else if (position === 'afterbegin' || position === 'beforeend') {
+              ctxLocalName = this.localName;
+            }
+            const ctxElement = getHtmlContext(ctxLocalName);
+            ctxElement.innerHTML = text;
+            const nodes = [...ctxElement.childNodes];
+            if (position === 'beforebegin') {
+              this.before(...nodes);
+            } else if (position === 'afterbegin') {
+              this.prepend(...nodes);
+            } else if (position === 'beforeend') {
+              this.append(...nodes);
+            } else if (position === 'afterend') {
+              this.after(...nodes);
+            }
+          } else {
+            originalInsertAdjacentHTML.call(this, position, text);
+          }
+        };
+      }
     }
     function parseAndReplaceCurrentXMLDoc(doc) {
       const xml = new XMLSerializer().serializeToString(doc);
