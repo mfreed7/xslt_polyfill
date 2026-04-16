@@ -595,6 +595,14 @@
         // allowing the author's own CSS to take precedence naturally.
         const resetStyles = document.createElementNS('http://www.w3.org/1999/xhtml', 'style');
         resetStyles.textContent = `
+          html, body {
+            white-space: normal;
+            font-family: initial;
+            font-size: initial;
+          }
+          body {
+            margin: 8px;
+          }
           table {
             width: auto;
             min-width: auto;
@@ -607,12 +615,7 @@
           }
           td {
             vertical-align: initial;
-          }
-          html, body {
-            white-space: normal;
-            font-family: initial;
-            font-size: initial;
-            margin: 0;
+            padding: 0;
           }
           tbody, thead, tfoot, tr, th {
             white-space: normal;
