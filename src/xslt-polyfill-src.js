@@ -572,7 +572,7 @@
       const scripts = Array.from(fragment.querySelectorAll('script'));
       const textArea = document.createElementNS('http://www.w3.org/1999/xhtml', 'textarea');
       const scriptMarkers = scripts.map((oldScript) => {
-        const marker = document.createTextNode('');
+        const marker = document.createComment(' script placeholder ');
         oldScript.parentNode.replaceChild(marker, oldScript);
         return { oldScript, marker };
       });
