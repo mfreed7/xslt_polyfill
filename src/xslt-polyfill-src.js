@@ -593,7 +593,7 @@
         // Document, these rules persist and break the layout of the newly rendered HTML.
         // We inject a reset stylesheet at the very top of the <head> to override these UA styles,
         // allowing the author's own CSS to take precedence naturally.
-        const resetStyles = document.createElementNS('http://www.w3.org/1999/xhtml', 'resetStyles');
+        const resetStyles = document.createElementNS('http://www.w3.org/1999/xhtml', 'style');
         resetStyles.textContent = `
           table {
             width: auto;
@@ -675,7 +675,6 @@
       }
       return _originalCreateElement.apply(document, arguments);
     };
-
     if (document instanceof XMLDocument) {
       const originalTagName = Object.getOwnPropertyDescriptor(Element.prototype, 'tagName').get;
       Object.defineProperty(Element.prototype, 'tagName', {
@@ -687,7 +686,6 @@
           return val;
         },
       });
-
       const originalNodeName = Object.getOwnPropertyDescriptor(Node.prototype, 'nodeName').get;
       Object.defineProperty(Node.prototype, 'nodeName', {
         get() {
