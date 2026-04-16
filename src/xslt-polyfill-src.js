@@ -569,58 +569,55 @@
         fragment.append(...root.childNodes);
       }
       // Scripts need to be re-created, so they will execute:
-      const scripts = fragment.querySelectorAll('script');
+      const scripts = Array.from(fragment.querySelectorAll('script'));
       const textArea = document.createElementNS('http://www.w3.org/1999/xhtml', 'textarea');
-      let pendingScripts = 0;
-      let contentInserted = false;
-      let eventsFired = false;
-      const dispatchEvents = () => {
-        if (eventsFired || !contentInserted || pendingScripts > 0) {
-          return;
-        }
-        eventsFired = true;
-        document.dispatchEvent(new Event('DOMContentLoaded', { bubbles: true, cancelable: true }));
-        window.dispatchEvent(new Event('load', { bubbles: false, cancelable: false }));
-      };
-      const onScriptDone = () => {
-        --pendingScripts;
-        dispatchEvents();
-      };
-      scripts.forEach((oldScript) => {
-        const newScript = document.createElementNS('http://www.w3.org/1999/xhtml', 'script');
-        Array.from(oldScript.attributes).forEach((attr) => {
-          newScript.setAttribute(attr.name, attr.value);
-        });
-        if (newScript.hasAttribute('src')) {
-          ++pendingScripts;
-          newScript.addEventListener('load', onScriptDone);
-          newScript.addEventListener('error', onScriptDone);
-        }
-        // Because the original XSLT doc is serialized with
-        // `XMLSerializer().serializeToString(compiledXsltDoc)` above, the
-        // contents of the script will have been treated as XML children of the
-        // <script> node, meaning special characters *might* have been escaped.
-        // E.g. `foo => bar` might have been turned into `foo =&gt; bar`. But
-        // also, the source script might have been written with special
-        // characters already escaped, e.g. `new RegExp("[\\?&amp;]");`. We use
-        // the textarea trick to handle both. But we have to use
-        // setHTMLUnsafe() and not innerHTML, because the latter will invoke
-        // the XML parser, which doesn't like unescaped things like `&`.
-        textArea.setHTMLUnsafe(oldScript.textContent);
-        newScript.textContent = textArea.value;
-        oldScript.parentNode.replaceChild(newScript, oldScript);
+      const scriptMarkers = scripts.map((oldScript) => {
+        const marker = document.createTextNode('');
+        oldScript.parentNode.replaceChild(marker, oldScript);
+        return { oldScript, marker };
       });
-      // The html element could have attributes - copy them.
       if (targetElement instanceof HTMLHtmlElement) {
         for (const attr of parsedDoc.documentElement.attributes) {
           targetElement.setAttribute(attr.name, attr.value);
         }
       }
       targetElement.replaceChildren(fragment);
-      contentInserted = true;
-      // Since all of the scripts above will run after the document load, we
-      // fire synthetic ones, to make sure 'load' and 'DOMContentLoaded' work.
-      setTimeout(dispatchEvents, 0);
+      (async () => {
+        for (const { oldScript, marker } of scriptMarkers) {
+          let resolvePromise;
+          const promise = new Promise((r) => {
+            resolvePromise = r;
+          });
+          const newScript = document.createElementNS('http://www.w3.org/1999/xhtml', 'script');
+          Array.from(oldScript.attributes).forEach((attr) => {
+            newScript.setAttribute(attr.name, attr.value);
+          });
+          const isAsyncOrDefer = newScript.hasAttribute('async') || newScript.hasAttribute('defer');
+          const isBlocking = newScript.hasAttribute('src') && !isAsyncOrDefer;
+          if (isBlocking) {
+            newScript.addEventListener('load', resolvePromise, { once: true });
+            newScript.addEventListener('error', resolvePromise, { once: true });
+          }
+          // Because the original XSLT doc is serialized with
+          // `XMLSerializer().serializeToString(compiledXsltDoc)` above, the
+          // contents of the script will have been treated as XML children of the
+          // <script> node, meaning special characters *might* have been escaped.
+          // E.g. `foo => bar` might have been turned into `foo =&gt; bar`. But
+          // also, the source script might have been written with special
+          // characters already escaped, e.g. `new RegExp("[\\?&amp;]");`. We use
+          // the textarea trick to handle both. But we have to use
+          // setHTMLUnsafe() and not innerHTML, because the latter will invoke
+          // the XML parser, which doesn't like unescaped things like `&`.
+          textArea.setHTMLUnsafe(oldScript.textContent);
+          newScript.textContent = textArea.value;
+          marker.parentNode.replaceChild(newScript, marker);
+          if (isBlocking) {
+            await promise;
+          }
+        }
+        document.dispatchEvent(new Event('DOMContentLoaded', { bubbles: true, cancelable: true }));
+        window.dispatchEvent(new Event('load', { bubbles: false, cancelable: false }));
+      })();
     }
 
     // If we're polyfilling, we need to patch `document.createElement()`, because

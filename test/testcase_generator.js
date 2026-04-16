@@ -932,6 +932,39 @@ const testCases = [
         </script>
         </body>`,
   },
+  {
+    name: "Sequential Script Execution",
+    xml: `<?xml version="1.0" encoding="UTF-8"?>
+        <?xml-stylesheet type="text/xsl" href="{{XSL_HREF}}"?>
+        <document>
+            {{SCRIPT_INJECTION_LOCATION}}
+            INIT
+        </document>`,
+    get xsl() {
+      const padding = " ".repeat(1024 * 1024 * 2);
+      const scriptContent = "window.sequentialScriptLoaded = true; /* " + padding + " */";
+      const scriptSrc = "data:text/javascript;base64," + Buffer.from(scriptContent).toString("base64");
+      return `<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+        <xsl:output method="html"/>
+        <xsl:template match="/">
+            <body>
+                <div id="target" style="color:red">INIT</div>
+                <script>window.sequentialScriptLoaded = false;</script>
+                <script src="${scriptSrc}"></script>
+                <script>
+                    const div = document.getElementById("target");
+                    if (window.sequentialScriptLoaded === true) {
+                        div.style.color = "green";
+                        div.textContent = "PASS";
+                    } else {
+                        div.textContent = "FAIL: inline script executed before external script";
+                    }
+                </script>
+            </body>
+        </xsl:template>
+    </xsl:stylesheet>`;
+    },
+  }
 ];
 
 const fs = require('fs');
