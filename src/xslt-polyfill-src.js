@@ -577,11 +577,40 @@
         return { oldScript, marker };
       });
       if (targetElement instanceof HTMLHtmlElement) {
+        // Clear existing attributes to remove any artifacts left by the browser's native XML viewer.
+        // For example, Chrome's XML viewer adds specific IDs or classes to the <html> element.
+        while (targetElement.attributes.length > 0) {
+          targetElement.removeAttribute(targetElement.attributes[0].name);
+        }
         for (const attr of parsedDoc.documentElement.attributes) {
           targetElement.setAttribute(attr.name, attr.value);
         }
       }
       targetElement.replaceChildren(fragment);
+      if (targetElement instanceof HTMLHtmlElement) {
+        // The browser's native XML viewer injects a hidden User Agent stylesheet that applies
+        // rules like `white-space: nowrap` and monospace fonts. Since we are reusing the same
+        // Document, these rules persist and break the layout of the newly rendered HTML.
+        // We inject a reset stylesheet at the very top of the <head> to override these UA styles,
+        // allowing the author's own CSS to take precedence naturally.
+        const style = document.createElementNS('http://www.w3.org/1999/xhtml', 'style');
+        style.textContent =
+          '          html, body {\n' +
+          '            white-space: normal;\n' +
+          '            font-family: initial;\n' +
+          '            font-size: initial;\n' +
+          '            margin: 0;\n' +
+          '          }\n' +
+          '          table, tbody, thead, tfoot, tr, th, td {\n' +
+          '            white-space: normal;\n' +
+          '          }\n';
+        const head = targetElement.querySelector('head');
+        if (head) {
+          head.prepend(style);
+        } else {
+          targetElement.prepend(style);
+        }
+      }
       (async () => {
         for (const { oldScript, marker } of scriptMarkers) {
           let resolvePromise;
