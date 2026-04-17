@@ -412,6 +412,28 @@
       return source && source.nodeType === Node.DOCUMENT_NODE && !source.documentElement;
     }
 
+    // Event handlers ('on*' attributes) parsed into DOMParser inert documents
+    // do not create event listeners. Remove and re-add them to activate them.
+    function resetEventHandlers(root) {
+      if (!root) return;
+      const elements = root.querySelectorAll ? Array.from(root.querySelectorAll('*')) : [];
+      if (root.nodeType === Node.ELEMENT_NODE) {
+        elements.push(root);
+      }
+      for (let i = 0; i < elements.length; i++) {
+        const el = elements[i];
+        const attrs = el.getAttributeNames();
+        for (let j = 0; j < attrs.length; j++) {
+          const attr = attrs[j];
+          if (attr.toLowerCase().startsWith('on')) {
+            const val = el.getAttribute(attr);
+            el.removeAttribute(attr);
+            el.setAttribute(attr, val);
+          }
+        }
+      }
+    }
+
     function lowercaseHtmlAttributes(root) {
       if (!root) return;
       const elements = root.querySelectorAll('*');
@@ -501,6 +523,7 @@
               lowercaseHtmlAttributes(rootNode);
             }
             fragment.append(...rootNode.childNodes);
+            resetEventHandlers(fragment);
             return fragment;
           }
           case 'text/html': {
@@ -520,6 +543,7 @@
             }
             html?.remove();
             fragment.append(...doc.childNodes);
+            resetEventHandlers(fragment);
             return fragment;
           }
           default:
@@ -679,6 +703,7 @@
         }
       }
       targetElement.replaceChildren(fragment);
+      resetEventHandlers(targetElement);
       if (targetElement instanceof HTMLHtmlElement) {
         // The browser's native XML viewer injects a hidden User Agent stylesheet that applies
         // rules like `white-space: nowrap` and monospace fonts. Since we are reusing the same
