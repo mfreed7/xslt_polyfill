@@ -711,32 +711,71 @@
         // We inject a reset stylesheet at the very top of the <head> to override these UA styles,
         // allowing the author's own CSS to take precedence naturally.
         const resetStyles = document.createElementNS('http://www.w3.org/1999/xhtml', 'style');
-        resetStyles.textContent = `
-          html, body {
-            white-space: normal;
-            font-family: initial;
-            font-size: initial;
-          }
-          body {
-            margin: 8px;
-          }
-          table {
-            width: auto;
-            min-width: auto;
-            border-spacing: initial;
-            white-space: normal;
-            margin: initial;
-            font-size: initial;
-            font-family: initial;
-            tab-size: initial;
-          }
-          td {
-            vertical-align: initial;
-            padding: 0;
-          }
-          tbody, thead, tfoot, tr, th {
-            white-space: normal;
-          }`;
+        let supportsWhere = false;
+        try {
+          supportsWhere = CSS.supports('selector(:where(table:not([width])))');
+        } catch {}
+        if (supportsWhere) {
+          resetStyles.textContent = `
+            :where(html, body) {
+              white-space: normal;
+              font-family: initial;
+              font-size: initial;
+            }
+            :where(body) {
+              margin: 8px;
+            }
+            :where(table) {
+              min-width: auto;
+              white-space: normal;
+              font-size: initial;
+              font-family: initial;
+              tab-size: initial;
+            }
+            :where(table:not([width])) {
+              width: auto;
+            }
+            :where(table:not([cellspacing])) {
+              border-spacing: initial;
+            }
+            :where(table:not([align])) {
+              margin: initial;
+            }
+            :where(td) {
+              vertical-align: initial;
+              padding: 0;
+            }
+            :where(tbody, thead, tfoot, tr, th) {
+              white-space: normal;
+            }`;
+        } else {
+          resetStyles.textContent = `
+            html, body {
+              white-space: normal;
+              font-family: initial;
+              font-size: initial;
+            }
+            body {
+              margin: 8px;
+            }
+            table {
+              width: auto;
+              min-width: auto;
+              border-spacing: initial;
+              white-space: normal;
+              margin: initial;
+              font-size: initial;
+              font-family: initial;
+              tab-size: initial;
+            }
+            td {
+              vertical-align: initial;
+              padding: 0;
+            }
+            tbody, thead, tfoot, tr, th {
+              white-space: normal;
+            }`;
+        }
         const head = targetElement.querySelector('head');
         if (head) {
           head.prepend(resetStyles);

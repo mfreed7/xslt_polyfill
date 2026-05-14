@@ -1004,6 +1004,43 @@ const testCases = [
         </xsl:template>
     </xsl:stylesheet>`,
   },
+  {
+    name: 'Table Presentational Attributes',
+    xml: `<?xml version="1.0" encoding="UTF-8"?>
+        <?xml-stylesheet type="text/xsl" href="{{XSL_HREF}}"?>
+        <document>
+            {{SCRIPT_INJECTION_LOCATION}}
+            INIT
+        </document>`,
+    xsl: `<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+        <xsl:output method="html"/>
+        <xsl:template match="/">
+            <html>
+            <body>
+                <table id="tbl" width="60%" cellspacing="10" align="center">
+                    <tr><td>Cell</td></tr>
+                </table>
+                <div id="target" style="color:red">INIT</div>
+                <script>
+                    const tbl = document.getElementById("tbl");
+                    const target = document.getElementById("target");
+                    const style = window.getComputedStyle(tbl);
+                    const widthPass = tbl.getAttribute("width") === "60%" &amp;&amp; tbl.offsetWidth > 35;
+                    const spacingPass = style.borderSpacing === "10px" || style.borderSpacing === "10px 10px";
+                    const alignPass = tbl.getBoundingClientRect().left > 15;
+                    if (widthPass &amp;&amp; spacingPass &amp;&amp; alignPass) {
+                        target.style.color = "green";
+                        target.textContent = "PASS";
+                    } else {
+                        target.textContent = "FAIL: width=" + widthPass + ", spacing=" + style.borderSpacing + ", align=" + alignPass;
+                    }
+                    tbl.remove(); // Cleanup
+                </script>
+            </body>
+            </html>
+        </xsl:template>
+    </xsl:stylesheet>`,
+  },
 ];
 
 const fs = require('fs');
