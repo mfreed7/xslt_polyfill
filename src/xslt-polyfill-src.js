@@ -736,17 +736,22 @@
               width: auto;
             }
             :where(table:not([cellspacing])) {
-              border-spacing: initial;
+              border-spacing: 2px;
             }
             :where(table:not([align])) {
               margin: initial;
             }
             :where(td) {
               vertical-align: initial;
-              padding: 0;
             }
             :where(tbody, thead, tfoot, tr, th) {
               white-space: normal;
+            }
+            :where(li) {
+              list-style-position: inside;
+            }
+            :where(ul, ol, menu) :where(li) {
+              list-style-position: unset;
             }`;
         } else {
           resetStyles.textContent = `
@@ -761,7 +766,7 @@
             table {
               width: auto;
               min-width: auto;
-              border-spacing: initial;
+              border-spacing: 2px;
               white-space: normal;
               margin: initial;
               font-size: initial;
@@ -770,10 +775,15 @@
             }
             td {
               vertical-align: initial;
-              padding: 0;
             }
             tbody, thead, tfoot, tr, th {
               white-space: normal;
+            }
+            li {
+              list-style-position: inside;
+            }
+            ul li, ol li, menu li {
+              list-style-position: unset;
             }`;
         }
         const head = targetElement.querySelector('head');
