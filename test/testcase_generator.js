@@ -1020,21 +1020,32 @@ const testCases = [
                 <table id="tbl" width="60%" cellspacing="10" align="center">
                     <tr><td>Cell</td></tr>
                 </table>
+                <table id="tbl2">
+                    <tr><td id="td2"><li>Ex1</li></td></tr>
+                </table>
                 <div id="target" style="color:red">INIT</div>
                 <script>
                     const tbl = document.getElementById("tbl");
+                    const tbl2 = document.getElementById("tbl2");
                     const target = document.getElementById("target");
                     const style = window.getComputedStyle(tbl);
+                    const style2 = window.getComputedStyle(tbl2);
+                    const tdStyle = window.getComputedStyle(document.getElementById("td2"));
+                    const liStyle = window.getComputedStyle(tbl2.querySelector("li"));
                     const widthPass = tbl.getAttribute("width") === "60%" &amp;&amp; tbl.offsetWidth > 35;
                     const spacingPass = style.borderSpacing === "10px" || style.borderSpacing === "10px 10px";
                     const alignPass = tbl.getBoundingClientRect().left > 15;
-                    if (widthPass &amp;&amp; spacingPass &amp;&amp; alignPass) {
+                    const defaultPass = (style2.borderSpacing === "2px" || style2.borderSpacing === "2px 2px") &amp;&amp;
+                                        tdStyle.paddingTop !== "0px" &amp;&amp;
+                                        liStyle.listStylePosition === "inside";
+                    if (widthPass &amp;&amp; spacingPass &amp;&amp; alignPass &amp;&amp; defaultPass) {
                         target.style.color = "green";
                         target.textContent = "PASS";
                     } else {
-                        target.textContent = "FAIL: width=" + widthPass + ", spacing=" + style.borderSpacing + ", align=" + alignPass;
+                        target.textContent = "FAIL: width=" + widthPass + ", spacing=" + style.borderSpacing + ", align=" + alignPass + ", default=" + defaultPass;
                     }
                     tbl.remove(); // Cleanup
+                    tbl2.remove();
                 </script>
             </body>
             </html>
