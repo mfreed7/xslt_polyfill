@@ -952,8 +952,24 @@
         });
     }
 
+    async function loadXmlWithXsltFromUrl(url) {
+      url = absoluteUrl(url);
+      const xmlResponse = await fetch(url);
+      if (!xmlResponse.ok) {
+        return showError(`Failed to fetch XML file: ${xmlResponse.statusText}`);
+      }
+      const xmlBytes = new Uint8Array(await xmlResponse.arrayBuffer());
+      return loadXmlWithXsltFromBytes(xmlBytes, url);
+    }
+
+    function loadXmlUrlWithXsltWhenReady(url) {
+      return xsltPolyfillReady().then(() => loadXmlWithXsltFromUrl(url));
+    }
+
     window.parseAndReplaceCurrentXMLDoc = parseAndReplaceCurrentXMLDoc;
     window.loadXmlWithXsltFromBytes = loadXmlWithXsltFromBytes;
+    window.loadXmlWithXsltFromUrl = loadXmlWithXsltFromUrl;
+    window.loadXmlUrlWithXsltWhenReady = loadXmlUrlWithXsltWhenReady;
   } // if (polyfillWillLoad)
 
   // Replace the current document with the provided error message.
