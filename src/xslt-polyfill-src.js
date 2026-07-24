@@ -594,8 +594,8 @@
       const xmlTextChunk = decoder.decode(xmlBytes.subarray(0, 2048));
 
       let xsltPath = null;
-      const piMatch = xmlTextChunk.match(/<\?xml-stylesheet\s+([^>]*?)\?>/);
-      if (piMatch) {
+      const piMatches = xmlTextChunk.matchAll(/<\?xml-stylesheet\s+([^>]*?)\?>/g);
+      for (const piMatch of piMatches) {
         const piData = piMatch[1];
         const hrefMatch = piData.match(/href\s*=\s*(["'])(.*?)\1/)?.[2];
         const typeMatch = piData.match(/type\s*=\s*(["'])(.*?)\1/)?.[2]?.toLowerCase();
@@ -607,6 +607,7 @@
             .replace(/&quot;/g, '"')
             .replace(/&apos;/g, "'")
             .replace(/&amp;/g, '&');
+          break;
         }
       }
 
