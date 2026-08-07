@@ -377,6 +377,12 @@
           // 6. Free the result pointer itself, which was allocated by the C code.
           wasm_free(resultPtr);
 
+          // Workaround for libxslt appending an extra line feed to the result.
+          // See https://source.chromium.org/chromium/chromium/src/+/main:third_party/blink/renderer/core/xml/xslt_processor_libxslt.cc;l=221;drc=d2f52c0dcbbdb54a08ce6ab50f470942240e15b2
+          if (resultString.endsWith('\n')) {
+            resultString = resultString.slice(0, -1);
+          }
+
           // 7. Handle the plain text case, if needed.
           if (buildPlainText && mimeTypeString === 'text/plain') {
             resultString = resultString.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -832,8 +838,8 @@
       })();
     }
 
-    // If we're polyfilling, we need to patch `Document.prototype.createElement()` and `createElementNS()`,
-    // because those will create XML elements in the (still) XML document.
+    // If we're polyfilling, we need to patch `Document.prototype.createElement()`,
+    // because that will create XML elements in the (still) XML document.
     const _originalCreateElement = Document.prototype.createElement;
     const _originalCreateElementNS = Document.prototype.createElementNS;
 
@@ -848,17 +854,8 @@
       return _originalCreateElement.apply(this, arguments);
     }
 
-    function patchedCreateElementNS(ns, qualifiedName, options) {
-      if (this instanceof XMLDocument && (!ns || ns === '' || ns === 'http://www.w3.org/1999/xhtml')) {
-        ns = 'http://www.w3.org/1999/xhtml';
-      }
-      return _originalCreateElementNS.call(this, ns, qualifiedName, options);
-    }
-
     Document.prototype.createElement = patchedCreateElement;
-    Document.prototype.createElementNS = patchedCreateElementNS;
     document.createElement = patchedCreateElement;
-    document.createElementNS = patchedCreateElementNS;
 
     if (document instanceof XMLDocument) {
       const originalTagName = Object.getOwnPropertyDescriptor(Element.prototype, 'tagName').get;

@@ -118,7 +118,7 @@ const testCases = [
 
                         // 2. Test document.createElementNS with null namespace
                         const div2 = document.createElementNS(null, 'div');
-                        const p2 = (div2.namespaceURI === 'http://www.w3.org/1999/xhtml' &amp;&amp; div2.style !== undefined);
+                        const p2 = (div2.namespaceURI === null);
 
                         // 3. Test innerHTML on an XML container element
                         const xmlContainer = document.createElementNS(null, 'container');
@@ -1096,6 +1096,30 @@ const testCases = [
             </html>
         </xsl:template>
     </xsl:stylesheet>`,
+  },
+  {
+    name: 'No trailing newline in HTML output',
+    html: `
+        <!DOCTYPE html>
+        <body>
+        {{SCRIPT_INJECTION_LOCATION}}
+        <div id="target" style="color:red">INIT</div>
+        <script>
+        window.onload = () => {
+            const xml = \`<doc/>\`;
+            const xsl = \`<xsl:stylesheet xmlns:xsl="http://www.w3.org/1999/XSL/Transform" version="1.0">
+                <xsl:output method="html"/>
+                <xsl:template match="/">test</xsl:template>
+                </xsl:stylesheet>\`;
+            ${UTILITIES}
+            const {xsltProcessor,xmlDoc} = initProcessor(xml,xsl);
+            const fragment = xsltProcessor.transformToFragment(xmlDoc, document);
+            const serialized = new XMLSerializer().serializeToString(fragment);
+            const passed = serialized === 'test';
+            setResult(passed, passed ? '' : 'Expected "test", got ' + JSON.stringify(serialized));
+        };
+        </script>
+        </body>`,
   },
 ];
 
