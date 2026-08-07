@@ -630,6 +630,60 @@ const testCases = [
         </body>`,
   },
   {
+    name: 'Multiple Sequential Sorts Cache Stability',
+    html: `
+        <!DOCTYPE html>
+        <body>
+        {{SCRIPT_INJECTION_LOCATION}}
+        <div id="target" style="color:red">INIT</div>
+        <script>
+        window.onload = () => {
+            const xml = \`<?xml version="1.0" encoding="utf-8"?>
+                <root>
+                    <group id="1">
+                        <item>Item CCC Long Name</item>
+                        <item>Item AAA Long Name</item>
+                        <item>Item BBB Long Name</item>
+                    </group>
+                    <group id="2">
+                        <item>Item FFF Long Name</item>
+                        <item>Item DDD Long Name</item>
+                        <item>Item EEE Long Name</item>
+                    </group>
+                </root>\`;
+            const xsl = \`<?xml version="1.0" encoding="utf-8"?>
+                <xsl:stylesheet xmlns:xsl="http://www.w3.org/1999/XSL/Transform" version="1.0">
+                    <xsl:output method="text" encoding="UTF-8"/>
+                    <xsl:template match="/">
+                        <xsl:for-each select="root/group[@id='1']/item">
+                            <xsl:sort select="."/>
+                            <xsl:value-of select="."/>
+                            <xsl:text>,</xsl:text>
+                        </xsl:for-each>
+                        <xsl:text>|</xsl:text>
+                        <xsl:for-each select="root/group[@id='2']/item">
+                            <xsl:sort select="."/>
+                            <xsl:value-of select="."/>
+                            <xsl:text>,</xsl:text>
+                        </xsl:for-each>
+                    </xsl:template>
+                </xsl:stylesheet>\`;
+            ${UTILITIES}
+            const {xsltProcessor,xmlDoc} = initProcessor(xml,xsl);
+            const fragment = xsltProcessor.transformToFragment(xmlDoc, document);
+            const result = fragment.textContent.trim();
+            const expected = "Item AAA Long Name,Item BBB Long Name,Item CCC Long Name,|Item DDD Long Name,Item EEE Long Name,Item FFF Long Name,";
+            
+            if (result === expected) {
+                setResult(true);
+            } else {
+                setResult(false, 'Expected ' + JSON.stringify(expected) + ' but got ' + JSON.stringify(result));
+            }
+        };
+        </script>
+        </body>`,
+  },
+  {
     name: 'Load and DOMContentLoaded Events',
     xml: `<?xml version="1.0" encoding="UTF-8"?>
         <?xml-stylesheet type="text/xsl" href="{{XSL_HREF}}"?>
