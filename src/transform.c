@@ -244,6 +244,11 @@ static void xslt_polyfill_sort_function(xsltTransformContextPtr ctxt,
   if ((list == NULL) || (list->nodeNr <= 1)) {
     return;
   }
+
+  // Clear JS string cache used for sorting so that recycled heap pointer
+  // addresses from prior sorts do not return stale cached strings.
+  clear_collate_cache();
+
   for (j = 0; j < nbsorts; j++) {
     xmlChar *evaluated_lang;
     comp = (const xsltStylePreComp *)sorts[j]->psvi;
