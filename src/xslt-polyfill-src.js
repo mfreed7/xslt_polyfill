@@ -620,6 +620,7 @@
       if (!xsltPath) {
         // Do not display an error, just leave the original content.
         console.warn(`XSLT Polyfill: No XSLT processing instruction found in ${xmlUrl}`);
+        setPolyfillSpinner(null);
         return;
       }
 
@@ -653,6 +654,7 @@
 
     // Replace the current document with the provided HTML.
     function replaceDoc(newHTML, mimeType) {
+      setPolyfillSpinner(null);
       if (typeof newHTML !== 'string') {
         return showError('newHTML should be a string');
       }
@@ -987,6 +989,7 @@
 
   // Replace the current document with the provided error message.
   function showError(errorMessage) {
+    setPolyfillSpinner(null);
     document.documentElement.innerHTML = errorMessage;
     throw new Error(errorMessage);
   }
