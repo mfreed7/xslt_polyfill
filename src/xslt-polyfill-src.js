@@ -832,25 +832,40 @@
       })();
     }
 
-    // If we're polyfilling, we need to patch `document.createElement()`, because
-    // that will create XML elements in the (still) XML document.
-    const _originalCreateElement = document.createElement;
-    document.createElement = function (tagName, options) {
-      if (document instanceof XMLDocument) {
-        const el = document.createElementNS('http://www.w3.org/1999/xhtml', tagName.toLowerCase());
+    // If we're polyfilling, we need to patch `Document.prototype.createElement()` and `createElementNS()`,
+    // because those will create XML elements in the (still) XML document.
+    const _originalCreateElement = Document.prototype.createElement;
+    const _originalCreateElementNS = Document.prototype.createElementNS;
+
+    function patchedCreateElement(tagName, options) {
+      if (this instanceof XMLDocument) {
+        const el = _originalCreateElementNS.call(this, 'http://www.w3.org/1999/xhtml', String(tagName).toLowerCase(), options);
         if (options && options.is) {
           el.setAttribute('is', options.is);
         }
         return el;
       }
-      return _originalCreateElement.apply(document, arguments);
-    };
+      return _originalCreateElement.apply(this, arguments);
+    }
+
+    function patchedCreateElementNS(ns, qualifiedName, options) {
+      if (this instanceof XMLDocument && (!ns || ns === '' || ns === 'http://www.w3.org/1999/xhtml')) {
+        ns = 'http://www.w3.org/1999/xhtml';
+      }
+      return _originalCreateElementNS.call(this, ns, qualifiedName, options);
+    }
+
+    Document.prototype.createElement = patchedCreateElement;
+    Document.prototype.createElementNS = patchedCreateElementNS;
+    document.createElement = patchedCreateElement;
+    document.createElementNS = patchedCreateElementNS;
+
     if (document instanceof XMLDocument) {
       const originalTagName = Object.getOwnPropertyDescriptor(Element.prototype, 'tagName').get;
       Object.defineProperty(Element.prototype, 'tagName', {
         get() {
           const val = originalTagName.call(this);
-          if (this.namespaceURI === 'http://www.w3.org/1999/xhtml' && val) {
+          if ((!this.namespaceURI || this.namespaceURI === 'http://www.w3.org/1999/xhtml') && val) {
             return val.toUpperCase();
           }
           return val;
@@ -860,7 +875,7 @@
       Object.defineProperty(Node.prototype, 'nodeName', {
         get() {
           const val = originalNodeName.call(this);
-          if (this.nodeType === 1 && this.namespaceURI === 'http://www.w3.org/1999/xhtml' && val) {
+          if (this.nodeType === 1 && (!this.namespaceURI || this.namespaceURI === 'http://www.w3.org/1999/xhtml') && val) {
             return val.toUpperCase();
           }
           return val;
@@ -880,7 +895,7 @@
             return originalInnerHTML.get.call(this);
           },
           set(value) {
-            if (this.ownerDocument instanceof XMLDocument && this.namespaceURI === 'http://www.w3.org/1999/xhtml') {
+            if (this.ownerDocument instanceof XMLDocument) {
               const ctxElement = getHtmlContext(this.localName);
               ctxElement.innerHTML = value;
               this.replaceChildren(...ctxElement.childNodes);
@@ -898,7 +913,7 @@
             return originalOuterHTML.get.call(this);
           },
           set(value) {
-            if (this.ownerDocument instanceof XMLDocument && this.namespaceURI === 'http://www.w3.org/1999/xhtml') {
+            if (this.ownerDocument instanceof XMLDocument) {
               const parent = this.parentNode;
               const ctxLocalName = parent && parent.nodeType === Node.ELEMENT_NODE ? parent.localName : 'div';
               const ctxElement = getHtmlContext(ctxLocalName);
@@ -914,7 +929,7 @@
       const originalInsertAdjacentHTML = Element.prototype.insertAdjacentHTML;
       if (originalInsertAdjacentHTML) {
         Element.prototype.insertAdjacentHTML = function (position, text) {
-          if (this.ownerDocument instanceof XMLDocument && this.namespaceURI === 'http://www.w3.org/1999/xhtml') {
+          if (this.ownerDocument instanceof XMLDocument) {
             position = position.toLowerCase();
             let ctxLocalName = 'div';
             if (position === 'beforebegin' || position === 'afterend') {

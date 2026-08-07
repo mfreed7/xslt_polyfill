@@ -100,6 +100,51 @@ const testCases = [
         </xsl:stylesheet>`,
   },
   {
+    name: 'createElement and style in XML document',
+    xml: `<?xml version="1.0" encoding="UTF-8"?>
+        <?xml-stylesheet type="text/xsl" href="{{XSL_HREF}}"?>
+        <document>
+            {{SCRIPT_INJECTION_LOCATION}}
+            INIT
+        </document>`,
+    xsl: `<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+            <xsl:output method="html"/>
+            <xsl:template match="/">
+                <body>
+                    <script>
+                        // 1. Test Document.prototype.createElement
+                        const div1 = Document.prototype.createElement.call(document, 'div');
+                        const p1 = (div1.namespaceURI === 'http://www.w3.org/1999/xhtml' &amp;&amp; div1.style !== undefined);
+
+                        // 2. Test document.createElementNS with null namespace
+                        const div2 = document.createElementNS(null, 'div');
+                        const p2 = (div2.namespaceURI === 'http://www.w3.org/1999/xhtml' &amp;&amp; div2.style !== undefined);
+
+                        // 3. Test innerHTML on an XML container element
+                        const xmlContainer = document.createElementNS(null, 'container');
+                        xmlContainer.innerHTML = '&lt;div class="leaflet-pane"&gt;&lt;/div&gt;';
+                        const div3 = xmlContainer.firstElementChild;
+                        const p3 = (div3 &amp;&amp; div3.namespaceURI === 'http://www.w3.org/1999/xhtml' &amp;&amp; div3.style !== undefined);
+
+                        if (p1 &amp;&amp; p2 &amp;&amp; p3) {
+                            const target = document.createElement('div');
+                            target.id = 'target';
+                            target.style.color = 'green';
+                            target.textContent = 'PASS';
+                            document.body.appendChild(target);
+                        } else {
+                            const target = document.createElement('div');
+                            target.id = 'target';
+                            target.style.color = 'red';
+                            target.textContent = \`FAIL: p1=\${p1}, p2=\${p2}, p3=\${p3}\`;
+                            document.body.appendChild(target);
+                        }
+                    </script>
+                </body>
+            </xsl:template>
+        </xsl:stylesheet>`,
+  },
+  {
     name: "document('') Functionality",
     xml: `<?xml version="1.0"?>
         <?xml-stylesheet type="text/xsl" href="{{XSL_HREF}}"?>
