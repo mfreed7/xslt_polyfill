@@ -994,7 +994,10 @@
     throw new Error(errorMessage);
   }
 
-  if (!nativeSupported && document instanceof XMLDocument && !xsltDontAutoloadXmlDocs) {
+  const type = document.contentType;
+  const isXml = type === "text/xml" || type === "application/xml" || type.endsWith("+xml");
+  
+  if (!nativeSupported && isXml && !xsltDontAutoloadXmlDocs) {
     if (document.readyState === 'loading') {
       document.addEventListener(
         'DOMContentLoaded',
