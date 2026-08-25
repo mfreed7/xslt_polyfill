@@ -421,6 +421,10 @@ static xmlDocPtr docLoader(const xmlChar *URI, xmlDictPtr dict, int options,
   return doc;
 }
 
+// The size of the out_mime_type buffer that callers of transform() must
+// provide. Keep in sync with the allocation in src/xslt-polyfill-src.js.
+#define MIME_TYPE_BUFFER_SIZE 32
+
 // Copy of this:
 // https://source.chromium.org/chromium/chromium/src/+/main:third_party/blink/renderer/core/xml/xslt_processor_libxslt.cc;l=319;drc=936810fb4d0e0b979b156d5325a52e5b6c40b088
 static const char *ResultMIMEType(xmlDocPtr result_doc,
@@ -437,6 +441,12 @@ static const char *ResultMIMEType(xmlDocPtr result_doc,
 
   return "application/xml";
 }
+
+// ResultMIMEType() returns one of the three literals above; the longest is
+// "application/xml".
+_Static_assert(MIME_TYPE_BUFFER_SIZE >= sizeof("application/xml"),
+               "MIME_TYPE_BUFFER_SIZE must hold the longest MIME type that "
+               "ResultMIMEType() can return.");
 
 // Adjust the HTML encoding meta tag to match Chrome's behavior.
 // Libxslt's default behavior for HTML output is to insert <meta
@@ -542,8 +552,8 @@ static void adjust_html_encoding_meta(xmlDocPtr doc, xsltStylesheetPtr style) {
  * @param xslt_content A string containing the XSLT stylesheet.
  * @param params An array of key-value pairs for XSLT parameters, terminated by
  * NULL. Example: ["param1", "'value1'", "param2", "'value2'", NULL]
- * @param out_mime_type A pointer to a buffer (at least 32 bytes) where the
- * output MIME type will be written.
+ * @param out_mime_type A pointer to a buffer of at least
+ * MIME_TYPE_BUFFER_SIZE (32) bytes where the output MIME type will be written.
  * @return A pointer to a new string containing the transformed document, or
  * NULL on error.
  */
@@ -655,8 +665,7 @@ char *transform(const char *xml_content, int xml_len, const char *xslt_content,
 
   // Determine the MIME type using the helper function
   const char *mime = ResultMIMEType(result_doc, xslt_sheet);
-  strncpy(out_mime_type, mime, 32);
-  out_mime_type[31] = '\0';
+  snprintf(out_mime_type, MIME_TYPE_BUFFER_SIZE, "%s", mime);
 
   // 6. Ensure the HTML meta tag for encoding is in the Chrome/Blink format.
   adjust_html_encoding_meta(result_doc, xslt_sheet);

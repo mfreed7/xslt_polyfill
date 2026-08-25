@@ -342,7 +342,8 @@
         xsltPtr = writeBytesToHeap(xsltBytes);
         xsltUrlPtr = writeStringToHeap(xsltUrl);
 
-        // Allocate memory for the output mime type (minimum 32 bytes).
+        // Allocate memory for the output mime type. The size must match
+        // MIME_TYPE_BUFFER_SIZE in src/transform.c.
         mimeTypePtr = WasmModule._malloc(32);
         if (!mimeTypePtr) throw new Error('Wasm malloc failed for mimeType pointer.');
         new Uint8Array(WasmModule.wasmMemory.buffer, mimeTypePtr, 32).fill(0);
