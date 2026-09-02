@@ -145,6 +145,81 @@ const testCases = [
         </xsl:stylesheet>`,
   },
   {
+    name: 'XML documents keep spec DOM behavior',
+    xml: `<?xml version="1.0" encoding="UTF-8"?>
+        <?xml-stylesheet type="text/xsl" href="{{XSL_HREF}}"?>
+        <document>
+            {{SCRIPT_INJECTION_LOCATION}}
+            INIT
+        </document>`,
+    xsl: `<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+            <xsl:output method="html"/>
+            <xsl:template match="/">
+                <body>
+                    <script>
+                        // Per https://dom.spec.whatwg.org/#dom-document-createelement,
+                        // createElement() only ASCII-lowercases localName when the
+                        // document is an HTML document, and only uses the HTML
+                        // namespace for HTML documents (or content type
+                        // application/xhtml+xml). XML is case sensitive, so an
+                        // XMLDocument created by the page must be left alone by the
+                        // polyfill.
+                        const xdoc = document.implementation.createDocument('', '', null);
+                        const el = xdoc.createElement('CreateUser');
+                        const p1 = el.localName === 'CreateUser' &amp;&amp; el.tagName === 'CreateUser' &amp;&amp; el.nodeName === 'CreateUser';
+                        const p2 = el.namespaceURI === null;
+                        const p3 = new XMLSerializer().serializeToString(el) === '&lt;CreateUser/&gt;';
+
+                        // Case must also survive parsing and tree building.
+                        const parsed = new DOMParser().parseFromString('&lt;Root&gt;&lt;Child/&gt;&lt;/Root&gt;', 'application/xml');
+                        const p4 = parsed.documentElement.tagName === 'Root' &amp;&amp;
+                            parsed.documentElement.firstElementChild.tagName === 'Child';
+
+                        xdoc.appendChild(el);
+                        el.appendChild(xdoc.createElement('Inner'));
+                        const p5 = el.firstElementChild.tagName === 'Inner' &amp;&amp;
+                            new XMLSerializer().serializeToString(xdoc) === '&lt;CreateUser&gt;&lt;Inner/&gt;&lt;/CreateUser&gt;';
+
+                        // ...while the polyfilled document still behaves like an HTML document.
+                        const div = document.createElement('DIV');
+                        const p6 = div.localName === 'div' &amp;&amp; div.tagName === 'DIV' &amp;&amp;
+                            div.namespaceURI === 'http://www.w3.org/1999/xhtml';
+
+                        const target = document.createElement('div');
+                        target.id = 'target';
+                        const passed = p1 &amp;&amp; p2 &amp;&amp; p3 &amp;&amp; p4 &amp;&amp; p5 &amp;&amp; p6;
+                        target.style.color = passed ? 'green' : 'red';
+                        target.textContent = passed ? 'PASS' :
+                            'FAIL: p1=' + p1 + ', p2=' + p2 + ', p3=' + p3 + ', p4=' + p4 + ', p5=' + p5 + ', p6=' + p6;
+                        document.body.appendChild(target);
+                    </script>
+                </body>
+            </xsl:template>
+        </xsl:stylesheet>`,
+  },
+  {
+    name: 'XML document created from HTML page',
+    html: `
+        <!DOCTYPE html>
+        <body>
+        {{SCRIPT_INJECTION_LOCATION}}
+        <div id="target">INIT</div>
+        <script>
+        window.onload = () => {
+            ${UTILITIES}
+            // Loading the polyfill into an HTML page must not change how
+            // XMLDocuments created by that page behave.
+            const xdoc = document.implementation.createDocument('', '', null);
+            const el = xdoc.createElement('CreateUser');
+            const p1 = el.localName === 'CreateUser' && el.tagName === 'CreateUser' && el.namespaceURI === null;
+            const div = document.createElement('DIV');
+            const p2 = div.localName === 'div' && div.tagName === 'DIV';
+            setResult(p1 && p2, 'p1=' + p1 + ', p2=' + p2);
+        };
+        </script>
+        </body>`,
+  },
+  {
     name: "document('') Functionality",
     xml: `<?xml version="1.0"?>
         <?xml-stylesheet type="text/xsl" href="{{XSL_HREF}}"?>
