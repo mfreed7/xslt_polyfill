@@ -879,11 +879,17 @@
 
     // If we're polyfilling, we need to patch `Document.prototype.createElement()`,
     // because that will create XML elements in the (still) XML document.
+    //
+    // NOTE: this patch (and the ones below) must apply *only* to the document
+    // being polyfilled, not to other XML documents (e.g. from
+    // `document.implementation.createDocument()`), which must
+    // keep case-sensitive, null-namespace XML behavior.
+    const _polyfilledDocument = document instanceof XMLDocument ? document : null;
     const _originalCreateElement = Document.prototype.createElement;
     const _originalCreateElementNS = Document.prototype.createElementNS;
 
     function patchedCreateElement(tagName, options) {
-      if (this instanceof XMLDocument) {
+      if (this === _polyfilledDocument) {
         const el = _originalCreateElementNS.call(this, 'http://www.w3.org/1999/xhtml', String(tagName).toLowerCase(), options);
         if (options && options.is) {
           el.setAttribute('is', options.is);
@@ -980,7 +986,7 @@
             return originalInnerHTML.get.call(this);
           },
           set(value) {
-            if (this.ownerDocument instanceof XMLDocument) {
+            if (this.ownerDocument === _polyfilledDocument) {
               const ctxElement = getHtmlContext(this.localName, this.namespaceURI);
               ctxElement.innerHTML = value;
               const nodes = [...(ctxElement.content instanceof DocumentFragment ? ctxElement.content.childNodes : ctxElement.childNodes)];
@@ -1004,7 +1010,7 @@
             return originalOuterHTML.get.call(this);
           },
           set(value) {
-            if (this.ownerDocument instanceof XMLDocument) {
+            if (this.ownerDocument === _polyfilledDocument) {
               const parent = this.parentNode;
               if (!parent || parent.nodeType === Node.DOCUMENT_NODE) {
                 throw new DOMException(
@@ -1028,7 +1034,7 @@
       const originalInsertAdjacentHTML = Element.prototype.insertAdjacentHTML;
       if (originalInsertAdjacentHTML) {
         Element.prototype.insertAdjacentHTML = function (position, text) {
-          if (this.ownerDocument instanceof XMLDocument) {
+          if (this.ownerDocument === _polyfilledDocument) {
             position = position.toLowerCase();
             let ctxLocalName = 'div';
             let ctxNamespaceURI = 'http://www.w3.org/1999/xhtml';
