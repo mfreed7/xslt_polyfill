@@ -1175,6 +1175,285 @@ const testCases = [
         </script>
         </body>`,
   },
+  {
+    name: 'tagName and nodeName case preservation without namespace',
+    xml: `<?xml version="1.0" encoding="UTF-8"?>
+        <?xml-stylesheet type="text/xsl" href="{{XSL_HREF}}"?>
+        <document>
+            {{SCRIPT_INJECTION_LOCATION}}
+            INIT
+        </document>`,
+    xsl: `<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+        <xsl:output method="html"/>
+        <xsl:template match="/">
+            <body>
+                <div id="target" style="color:red">INIT</div>
+                <script>
+                    const elNull = document.createElementNS(null, 'customTag');
+                    const elEmpty = document.createElementNS('', 'anotherTag');
+                    const div = document.createElement('div');
+                    const target = document.getElementById("target");
+                    const p1 = elNull.tagName === 'customTag';
+                    const p2 = elNull.nodeName === 'customTag';
+                    const p3 = elEmpty.tagName === 'anotherTag';
+                    const p4 = elEmpty.nodeName === 'anotherTag';
+                    const p5 = div.tagName === 'DIV';
+                    const p6 = div.nodeName === 'DIV';
+                    if (p1 &amp;&amp; p2 &amp;&amp; p3 &amp;&amp; p4 &amp;&amp; p5 &amp;&amp; p6) {
+                        target.style.color = "green";
+                        target.textContent = "PASS";
+                    } else {
+                        target.textContent = 'FAIL: p1=' + p1 + ', p2=' + p2 + ', p3=' + p3 + ', p4=' + p4 + ', p5=' + p5 + ', p6=' + p6;
+                    }
+                </script>
+            </body>
+        </xsl:template>
+    </xsl:stylesheet>`,
+  },
+  {
+    name: 'Template element innerHTML in XML document',
+    xml: `<?xml version="1.0" encoding="UTF-8"?>
+        <?xml-stylesheet type="text/xsl" href="{{XSL_HREF}}"?>
+        <document>
+            {{SCRIPT_INJECTION_LOCATION}}
+            INIT
+        </document>`,
+    xsl: `<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+        <xsl:output method="html"/>
+        <xsl:template match="/">
+            <body>
+                <div id="target" style="color:red">INIT</div>
+                <script>
+                    const tmpl = document.createElement('template');
+                    tmpl.innerHTML = '&lt;span class="template-child"&gt;Hello Template&lt;/span&gt;';
+                    const target = document.getElementById("target");
+                    const hasContent = tmpl.content &amp;&amp; tmpl.content.childNodes.length === 1;
+                    const childNodesEmpty = tmpl.childNodes.length === 0;
+                    const span = tmpl.content ? tmpl.content.querySelector('.template-child') : null;
+                    const textCorrect = span &amp;&amp; span.textContent === 'Hello Template';
+                    const innerHtmlCorrect = tmpl.innerHTML === '&lt;span class="template-child"&gt;Hello Template&lt;/span&gt;';
+                    if (hasContent &amp;&amp; childNodesEmpty &amp;&amp; textCorrect &amp;&amp; innerHtmlCorrect) {
+                        target.style.color = "green";
+                        target.textContent = "PASS";
+                    } else {
+                        target.textContent = 'FAIL: hasContent=' + hasContent + ', childNodesEmpty=' + childNodesEmpty + ', textCorrect=' + textCorrect + ', innerHtmlCorrect=' + innerHtmlCorrect;
+                    }
+                </script>
+            </body>
+        </xsl:template>
+    </xsl:stylesheet>`,
+  },
+  {
+    name: 'Foreign content innerHTML outerHTML and insertAdjacentHTML',
+    xml: `<?xml version="1.0" encoding="UTF-8"?>
+        <?xml-stylesheet type="text/xsl" href="{{XSL_HREF}}"?>
+        <document>
+            {{SCRIPT_INJECTION_LOCATION}}
+            INIT
+        </document>`,
+    xsl: `<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+        <xsl:output method="html"/>
+        <xsl:template match="/">
+            <body>
+                <div id="target" style="color:red">INIT</div>
+                <script>
+                    const svgns = 'http://www.w3.org/2000/svg';
+                    const svg = document.createElementNS(svgns, 'svg');
+                    document.body.appendChild(svg);
+                    svg.innerHTML = '&lt;circle cx="10" cy="10" r="5"&gt;&lt;/circle&gt;';
+                    const circle = svg.firstElementChild;
+                    const p1 = circle &amp;&amp; circle.namespaceURI === svgns &amp;&amp; circle.localName === 'circle';
+
+                    const g = document.createElementNS(svgns, 'g');
+                    svg.appendChild(g);
+                    g.outerHTML = '&lt;rect width="20" height="20"&gt;&lt;/rect&gt;';
+                    const rect = svg.querySelector('rect');
+                    const p2 = rect &amp;&amp; rect.namespaceURI === svgns &amp;&amp; rect.localName === 'rect';
+
+                    rect.insertAdjacentHTML('afterend', '&lt;line x1="0" y1="0" x2="10" y2="10"&gt;&lt;/line&gt;');
+                    const line = svg.querySelector('line');
+                    const p3 = line &amp;&amp; line.namespaceURI === svgns &amp;&amp; line.localName === 'line';
+
+                    const target = document.getElementById("target");
+                    if (p1 &amp;&amp; p2 &amp;&amp; p3) {
+                        target.style.color = "green";
+                        target.textContent = "PASS";
+                    } else {
+                        target.textContent = 'FAIL: p1=' + p1 + ', p2=' + p2 + ', p3=' + p3;
+                    }
+                </script>
+            </body>
+        </xsl:template>
+    </xsl:stylesheet>`,
+  },
+  {
+    name: 'Element innerHTML getter HTML serialization',
+    xml: `<?xml version="1.0" encoding="UTF-8"?>
+        <?xml-stylesheet type="text/xsl" href="{{XSL_HREF}}"?>
+        <document>
+            {{SCRIPT_INJECTION_LOCATION}}
+            INIT
+        </document>`,
+    xsl: `<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+        <xsl:output method="html"/>
+        <xsl:template match="/">
+            <body>
+                <div id="target" style="color:red">INIT</div>
+                <script>
+                    const target = document.getElementById("target");
+                    const container = document.createElement('div');
+                    container.innerHTML = '&lt;p&gt;Line 1&lt;br&gt;Line 2&lt;/p&gt;';
+                    const html = container.innerHTML;
+                    const p1 = html.includes('&lt;br&gt;') &amp;&amp; !html.includes('&lt;br/&gt;');
+
+                    const container2 = document.createElement('div');
+                    container2.textContent = 'valid in html ' + String.fromCharCode(12) + ' not in xml';
+                    let p2 = false;
+                    try {
+                        const s = container2.innerHTML;
+                        p2 = s.includes('valid in html');
+                    } catch (e) {
+                        p2 = false;
+                    }
+                    if (p1 &amp;&amp; p2) {
+                        target.style.color = "green";
+                        target.textContent = "PASS";
+                    } else {
+                        target.textContent = 'FAIL: p1=' + p1 + ' (html=' + html + '), p2=' + p2;
+                    }
+                </script>
+            </body>
+        </xsl:template>
+    </xsl:stylesheet>`,
+  },
+  {
+    name: 'outerHTML setter on disconnected elements throws',
+    xml: `<?xml version="1.0" encoding="UTF-8"?>
+        <?xml-stylesheet type="text/xsl" href="{{XSL_HREF}}"?>
+        <document>
+            {{SCRIPT_INJECTION_LOCATION}}
+            INIT
+        </document>`,
+    xsl: `<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+        <xsl:output method="html"/>
+        <xsl:template match="/">
+            <body>
+                <div id="target" style="color:red">INIT</div>
+                <script>
+                    const target = document.getElementById("target");
+                    const el = document.createElement('div');
+                    let threw = false;
+                    let errorName = '';
+                    try {
+                        el.outerHTML = '&lt;span&gt;test&lt;/span&gt;';
+                    } catch (e) {
+                        threw = true;
+                        errorName = e.name;
+                    }
+                    const p1 = threw &amp;&amp; errorName === 'NoModificationAllowedError';
+                    if (p1) {
+                        target.style.color = "green";
+                        target.textContent = "PASS";
+                    } else {
+                        target.textContent = 'FAIL: threw=' + threw + ', errorName=' + errorName;
+                    }
+                </script>
+            </body>
+        </xsl:template>
+    </xsl:stylesheet>`,
+  },
+  {
+    name: 'compileImports deduplicates top-level variables',
+    xml: `<?xml version="1.0" encoding="UTF-8"?>
+        <?xml-stylesheet type="text/xsl" href="{{XSL_HREF}}"?>
+        <document>
+            {{SCRIPT_INJECTION_LOCATION}}
+            INIT
+        </document>`,
+    xsl: `<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+        <xsl:import href="data:text/xml,&lt;xsl:stylesheet version='1.0' xmlns:xsl='http://www.w3.org/1999/XSL/Transform'&gt;&lt;xsl:variable name='dupVar'&gt;IMPORTED&lt;/xsl:variable&gt;&lt;/xsl:stylesheet&gt;"/>
+        <xsl:variable name="dupVar">MAIN</xsl:variable>
+        <xsl:output method="html"/>
+        <xsl:template match="/">
+            <body>
+                <div id="target" style="color:red">INIT</div>
+                <script>
+                    const val = "<xsl:value-of select="$dupVar"/>";
+                    const target = document.getElementById("target");
+                    if (val === "MAIN") {
+                        target.style.color = "green";
+                        target.textContent = "PASS";
+                    } else {
+                        target.textContent = "FAIL: got " + val;
+                    }
+                </script>
+            </body>
+        </xsl:template>
+    </xsl:stylesheet>`,
+  },
+  {
+    name: 'compileImports skips parsererror documents',
+    xml: `<?xml version="1.0" encoding="UTF-8"?>
+        <?xml-stylesheet type="text/xsl" href="{{XSL_HREF}}"?>
+        <document>
+            {{SCRIPT_INJECTION_LOCATION}}
+            INIT
+        </document>`,
+    xsl: `<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+        <xsl:import href="data:text/xml,&lt;broken-xml-not-closed&gt;"/>
+        <xsl:output method="html"/>
+        <xsl:template match="/">
+            <body>
+                <div id="target" style="color:red">INIT</div>
+                <script>
+                    const target = document.getElementById("target");
+                    target.style.color = "green";
+                    target.textContent = "PASS";
+                </script>
+            </body>
+        </xsl:template>
+    </xsl:stylesheet>`,
+  },
+  {
+    name: 'showError handles unescaped characters in message',
+    xml: `<?xml version="1.0" encoding="UTF-8"?>
+        <?xml-stylesheet type="text/xsl" href="{{XSL_HREF}}"?>
+        <document>
+            {{SCRIPT_INJECTION_LOCATION}}
+            INIT
+        </document>`,
+    xsl: `<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+        <xsl:output method="html"/>
+        <xsl:template match="/">
+            <body>
+                <div id="target" style="color:red">INIT</div>
+                <script>
+                    let threwSyntaxError = false;
+                    let threwExpectedError = false;
+                    const testMsg = "Error: &lt;special&gt; &amp; 'unescaped' chars";
+                    try {
+                        window.showError(testMsg);
+                    } catch (e) {
+                        threwSyntaxError = e.name === 'SyntaxError';
+                        threwExpectedError = (e instanceof Error) &amp;&amp; !threwSyntaxError;
+                    }
+                    const textPassed = document.documentElement.textContent.includes(testMsg);
+                    const passed = threwExpectedError &amp;&amp; !threwSyntaxError &amp;&amp; textPassed;
+                    const target = document.createElement('div');
+                    target.id = 'target';
+                    if (passed) {
+                        target.style.color = 'green';
+                        target.textContent = 'PASS';
+                    } else {
+                        target.style.color = 'red';
+                        target.textContent = 'FAIL: threwExpected=' + threwExpectedError + ', threwSyntax=' + threwSyntaxError + ', textPassed=' + textPassed;
+                    }
+                    document.documentElement.replaceChildren(target);
+                </script>
+            </body>
+        </xsl:template>
+    </xsl:stylesheet>`,
+  },
 ];
 
 const fs = require('fs');

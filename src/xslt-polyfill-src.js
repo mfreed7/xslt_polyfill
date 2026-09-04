@@ -158,14 +158,27 @@
         return null;
       }
       const xmltext = await res.text();
-      return new DOMParser().parseFromString(xmltext, 'text/xml');
+      const doc = new DOMParser().parseFromString(xmltext, 'text/xml');
+      if (doc.querySelector('parsererror') || doc.documentElement?.localName === 'parsererror') {
+        return null;
+      }
+      return doc;
     }
 
-    function isDuplicateParam(nodeToImport, existingParamNames) {
+    function isDuplicateParam(nodeToImport, existingParamNames, existingVariableNames) {
       if (nodeToImport.localName !== 'param' || nodeToImport.namespaceURI !== 'http://www.w3.org/1999/XSL/Transform') {
         return false;
       }
-      return existingParamNames.has(nodeToImport.getAttribute('name'));
+      const name = nodeToImport.getAttribute('name');
+      return existingParamNames.has(name) || (existingVariableNames && existingVariableNames.has(name));
+    }
+
+    function isDuplicateVariable(nodeToImport, existingParamNames, existingVariableNames) {
+      if (nodeToImport.localName !== 'variable' || nodeToImport.namespaceURI !== 'http://www.w3.org/1999/XSL/Transform') {
+        return false;
+      }
+      const name = nodeToImport.getAttribute('name');
+      return existingVariableNames.has(name) || (existingParamNames && existingParamNames.has(name));
     }
 
     function getTopLevelParamNames(xsltsheet, xslns) {
@@ -174,6 +187,17 @@
       for (const param of params) {
         if (param.parentElement === xsltsheet.documentElement) {
           names.add(param.getAttribute('name'));
+        }
+      }
+      return names;
+    }
+
+    function getTopLevelVariableNames(xsltsheet, xslns) {
+      const vars = xsltsheet.documentElement.getElementsByTagNameNS(xslns, 'variable');
+      const names = new Set();
+      for (const v of vars) {
+        if (v.parentElement === xsltsheet.documentElement) {
+          names.add(v.getAttribute('name'));
         }
       }
       return names;
@@ -195,6 +219,7 @@
       }
 
       const existingParamNames = getTopLevelParamNames(xsltsheet, xslns);
+      const existingVariableNames = getTopLevelVariableNames(xsltsheet, xslns);
 
       // Fetch all imports at this level in parallel.
       const importDocs = await Promise.all(
@@ -206,7 +231,12 @@
       );
 
       for (const { importElement, importedDoc, href } of importDocs) {
-        if (!importedDoc || !importedDoc.documentElement) {
+        if (
+          !importedDoc ||
+          !importedDoc.documentElement ||
+          importedDoc.querySelector('parsererror') ||
+          importedDoc.documentElement.localName === 'parsererror'
+        ) {
           importElement.remove();
           continue;
         }
@@ -224,15 +254,22 @@
         await compileImports(importedDoc, href);
 
         // Move all children from the imported document to the main document.
-        // Special case: skip duplicate parameters if they were already merged.
+        // Special case: skip duplicate parameters and variables if they were already merged.
         let child = importedDocRoot.firstChild;
         while (child) {
           const next = child.nextSibling;
-          if (isDuplicateParam(child, existingParamNames)) {
+          if (
+            isDuplicateParam(child, existingParamNames, existingVariableNames) ||
+            isDuplicateVariable(child, existingParamNames, existingVariableNames)
+          ) {
             child.remove();
           } else {
-            if (child.localName === 'param' && child.namespaceURI === xslns) {
-              existingParamNames.add(child.getAttribute('name'));
+            if (child.namespaceURI === xslns) {
+              if (child.localName === 'param') {
+                existingParamNames.add(child.getAttribute('name'));
+              } else if (child.localName === 'variable') {
+                existingVariableNames.add(child.getAttribute('name'));
+              }
             }
             importElement.before(child);
           }
@@ -864,7 +901,7 @@
       Object.defineProperty(Element.prototype, 'tagName', {
         get() {
           const val = originalTagName.call(this);
-          if ((!this.namespaceURI || this.namespaceURI === 'http://www.w3.org/1999/xhtml') && val) {
+          if (this.namespaceURI === 'http://www.w3.org/1999/xhtml' && val) {
             return val.toUpperCase();
           }
           return val;
@@ -874,7 +911,7 @@
       Object.defineProperty(Node.prototype, 'nodeName', {
         get() {
           const val = originalNodeName.call(this);
-          if (this.nodeType === 1 && (!this.namespaceURI || this.namespaceURI === 'http://www.w3.org/1999/xhtml') && val) {
+          if (this.nodeType === 1 && this.namespaceURI === 'http://www.w3.org/1999/xhtml' && val) {
             return val.toUpperCase();
           }
           return val;
@@ -882,22 +919,77 @@
       });
       // Monkeypatch innerHTML, outerHTML, and insertAdjacentHTML for HTML elements in XML documents
       let _htmlDoc = null;
-      function getHtmlContext(localName) {
+      function getHtmlContext(localName, namespaceURI) {
         if (!_htmlDoc) _htmlDoc = document.implementation.createHTMLDocument('');
-        return _htmlDoc.createElement(localName || 'div');
+        const ns = namespaceURI || 'http://www.w3.org/1999/xhtml';
+        try {
+          return _htmlDoc.createElementNS(ns, localName || 'div');
+        } catch {
+          return _htmlDoc.createElement('div');
+        }
+      }
+
+      function cloneIntoHtmlDoc(node) {
+        const clone = _htmlDoc.importNode(node, true);
+        if (node.nodeType === Node.ELEMENT_NODE) {
+          if (node.localName === 'template' && node.content) {
+            if (clone.content && clone.content.childNodes.length === 0 && node.content.childNodes.length > 0) {
+              for (const c of node.content.childNodes) {
+                clone.content.appendChild(cloneIntoHtmlDoc(c));
+              }
+            }
+          }
+          const origTemplates = node.querySelectorAll ? node.querySelectorAll('template') : [];
+          if (origTemplates.length > 0) {
+            const cloneTemplates = clone.querySelectorAll('template');
+            for (let i = 0; i < origTemplates.length; i++) {
+              if (
+                origTemplates[i].content &&
+                cloneTemplates[i] &&
+                cloneTemplates[i].content &&
+                cloneTemplates[i].content.childNodes.length === 0 &&
+                origTemplates[i].content.childNodes.length > 0
+              ) {
+                for (const c of origTemplates[i].content.childNodes) {
+                  cloneTemplates[i].content.appendChild(cloneIntoHtmlDoc(c));
+                }
+              }
+            }
+          }
+        }
+        return clone;
       }
 
       const originalInnerHTML = Object.getOwnPropertyDescriptor(Element.prototype, 'innerHTML');
       if (originalInnerHTML) {
         Object.defineProperty(Element.prototype, 'innerHTML', {
           get() {
+            if (this.ownerDocument instanceof XMLDocument) {
+              if (!_htmlDoc) _htmlDoc = document.implementation.createHTMLDocument('');
+              const isTemplate =
+                this.localName === 'template' && this.namespaceURI === 'http://www.w3.org/1999/xhtml';
+              const container = isTemplate
+                ? getHtmlContext('div')
+                : getHtmlContext(this.localName, this.namespaceURI);
+              const target = isTemplate && this.content ? this.content : this;
+              for (const child of target.childNodes) {
+                container.appendChild(cloneIntoHtmlDoc(child));
+              }
+              return container.innerHTML;
+            }
             return originalInnerHTML.get.call(this);
           },
           set(value) {
             if (this.ownerDocument instanceof XMLDocument) {
-              const ctxElement = getHtmlContext(this.localName);
+              const ctxElement = getHtmlContext(this.localName, this.namespaceURI);
               ctxElement.innerHTML = value;
-              this.replaceChildren(...ctxElement.childNodes);
+              const nodes = [...(ctxElement.content instanceof DocumentFragment ? ctxElement.content.childNodes : ctxElement.childNodes)];
+              if (this.localName === 'template' && this.namespaceURI === 'http://www.w3.org/1999/xhtml' && this.content instanceof DocumentFragment) {
+                this.content.replaceChildren(...nodes);
+                this.replaceChildren();
+              } else {
+                this.replaceChildren(...nodes);
+              }
             } else {
               originalInnerHTML.set.call(this, value);
             }
@@ -914,10 +1006,18 @@
           set(value) {
             if (this.ownerDocument instanceof XMLDocument) {
               const parent = this.parentNode;
-              const ctxLocalName = parent && parent.nodeType === Node.ELEMENT_NODE ? parent.localName : 'div';
-              const ctxElement = getHtmlContext(ctxLocalName);
+              if (!parent || parent.nodeType === Node.DOCUMENT_NODE) {
+                throw new DOMException(
+                  "Failed to set the 'outerHTML' property on 'Element': This element has no parent node.",
+                  'NoModificationAllowedError',
+                );
+              }
+              const ctxLocalName = parent.nodeType === Node.ELEMENT_NODE ? parent.localName : 'div';
+              const ctxNamespaceURI = parent.nodeType === Node.ELEMENT_NODE ? parent.namespaceURI : 'http://www.w3.org/1999/xhtml';
+              const ctxElement = getHtmlContext(ctxLocalName, ctxNamespaceURI);
               ctxElement.innerHTML = value;
-              this.replaceWith(...ctxElement.childNodes);
+              const nodes = [...(ctxElement.content instanceof DocumentFragment ? ctxElement.content.childNodes : ctxElement.childNodes)];
+              this.replaceWith(...nodes);
             } else {
               originalOuterHTML.set.call(this, value);
             }
@@ -931,17 +1031,26 @@
           if (this.ownerDocument instanceof XMLDocument) {
             position = position.toLowerCase();
             let ctxLocalName = 'div';
+            let ctxNamespaceURI = 'http://www.w3.org/1999/xhtml';
             if (position === 'beforebegin' || position === 'afterend') {
               const parent = this.parentNode;
-              if (parent && parent.nodeType === Node.ELEMENT_NODE) {
+              if (!parent || parent.nodeType === Node.DOCUMENT_NODE) {
+                throw new DOMException(
+                  "Failed to execute 'insertAdjacentHTML' on 'Element': The element has no parent.",
+                  'NoModificationAllowedError',
+                );
+              }
+              if (parent.nodeType === Node.ELEMENT_NODE) {
                 ctxLocalName = parent.localName;
+                ctxNamespaceURI = parent.namespaceURI;
               }
             } else if (position === 'afterbegin' || position === 'beforeend') {
               ctxLocalName = this.localName;
+              ctxNamespaceURI = this.namespaceURI;
             }
-            const ctxElement = getHtmlContext(ctxLocalName);
+            const ctxElement = getHtmlContext(ctxLocalName, ctxNamespaceURI);
             ctxElement.innerHTML = text;
-            const nodes = [...ctxElement.childNodes];
+            const nodes = [...(ctxElement.content instanceof DocumentFragment ? ctxElement.content.childNodes : ctxElement.childNodes)];
             if (position === 'beforebegin') {
               this.before(...nodes);
             } else if (position === 'afterbegin') {
@@ -985,12 +1094,15 @@
     window.loadXmlWithXsltFromBytes = loadXmlWithXsltFromBytes;
     window.loadXmlWithXsltFromUrl = loadXmlWithXsltFromUrl;
     window.loadXmlUrlWithXsltWhenReady = loadXmlUrlWithXsltWhenReady;
+    window.showError = showError;
   } // if (polyfillWillLoad)
 
   // Replace the current document with the provided error message.
   function showError(errorMessage) {
     setPolyfillSpinner(null);
-    document.documentElement.innerHTML = errorMessage;
+    if (document.documentElement) {
+      document.documentElement.textContent = errorMessage;
+    }
     throw new Error(errorMessage);
   }
 
