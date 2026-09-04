@@ -72,8 +72,8 @@ $(OUT_FILE): src/transform.c $(XSLT_INSTALL_DIR)/lib/pkgconfig/libxslt.pc
 		-s ALLOW_MEMORY_GROWTH \
 		$(EMCC_SAFE_HEAP) \
 		$(EMCC_ASSERTIONS) \
-		-s INITIAL_MEMORY=32MB \
-		-s STACK_SIZE=5MB \
+		-s INITIAL_MEMORY=8MB \
+		-s STACK_SIZE=2MB \
 		-s EXPORT_NAME=createXSLTTransformModule \
 		-s EXPORTED_FUNCTIONS=_transform,_malloc,_free,Asyncify \
 		-s EXPORTED_RUNTIME_METHODS=cwrap,UTF8ToString,wasmMemory,Asyncify,stringToNewUTF8 \
@@ -81,7 +81,7 @@ $(OUT_FILE): src/transform.c $(XSLT_INSTALL_DIR)/lib/pkgconfig/libxslt.pc
 		-s ASYNCIFY \
 		$(EMCC_ASYNCIFY_DEBUG) \
 		-s ASYNCIFY_IMPORTS=fetch_and_load_document \
-		-s ASYNCIFY_STACK_SIZE=5MB \
+		-s ASYNCIFY_STACK_SIZE=256KB \
 		-Wl,--export-memory \
 		`pkg-config --libs libxml-2.0 libxslt libexslt`
 	@echo "--- $(OUT_FILE) (embedded WASM) ---"
