@@ -1281,6 +1281,7 @@ const testCases = [
                     } else {
                         target.textContent = 'FAIL: p1=' + p1 + ', p2=' + p2 + ', p3=' + p3;
                     }
+                    svg.remove();
                 </script>
             </body>
         </xsl:template>
@@ -1448,7 +1449,9 @@ const testCases = [
                         target.style.color = 'red';
                         target.textContent = 'FAIL: threwExpected=' + threwExpectedError + ', threwSyntax=' + threwSyntaxError + ', textPassed=' + textPassed;
                     }
-                    document.documentElement.replaceChildren(target);
+                    const body = document.createElement('body');
+                    body.appendChild(target);
+                    document.documentElement.replaceChildren(body);
                 </script>
             </body>
         </xsl:template>
