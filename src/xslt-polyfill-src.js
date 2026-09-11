@@ -1115,7 +1115,7 @@
   const type = document.contentType;
   const isXml = type === "text/xml" || type === "application/xml" || type.endsWith("+xml");
   
-  if (!nativeSupported && isXml && !xsltDontAutoloadXmlDocs) {
+  if (polyfillWillLoad && isXml && !xsltDontAutoloadXmlDocs) {
     if (document.readyState === 'loading') {
       document.addEventListener(
         'DOMContentLoaded',
