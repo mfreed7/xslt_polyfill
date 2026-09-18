@@ -23,7 +23,15 @@
     polyfillReadyPromiseResolve = resolve;
     polyfillReadyPromiseReject = reject;
   });
-  window.xsltUsePolyfillAlways = 'xsltUsePolyfillAlways' in window ? window.xsltUsePolyfillAlways : false;
+  // By default, the polyfill installs itself even if the browser has working
+  // native XSLT support. Set this flag to true to only install the polyfill
+  // when native support is missing.
+  const defaultOnlyIfNeeded =
+    // Backwards compat: `xsltUsePolyfillAlways = false` used to mean "use
+    // native XSLT if it's available".
+    'xsltUsePolyfillAlways' in window && window.xsltUsePolyfillAlways === false;
+  window.xsltUsePolyfillOnlyIfNeeded =
+    'xsltUsePolyfillOnlyIfNeeded' in window ? window.xsltUsePolyfillOnlyIfNeeded : defaultOnlyIfNeeded;
   window.xsltDontAutoloadXmlDocs = 'xsltDontAutoloadXmlDocs' in window ? window.xsltDontAutoloadXmlDocs : false;
   let xsltPolyfillHideRequestId = 0;
   let currentSpinnerText = null;
@@ -125,7 +133,7 @@
       nativeSupported = false;
     }
   }
-  const polyfillWillLoad = !nativeSupported || window.xsltUsePolyfillAlways;
+  const polyfillWillLoad = !nativeSupported || !window.xsltUsePolyfillOnlyIfNeeded;
   if (polyfillWillLoad) {
     // The polyfill
     const promiseName = 'xsltPolyfillReady';

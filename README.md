@@ -64,20 +64,19 @@ xsltProcessor.transformToFragment(xmlDoc, document);
 The example above is available in the `test/` folder of this repo:
 [`XSLTProcessor_example.html`](https://github.com/mfreed7/xslt_polyfill/blob/main/test/XSLTProcessor_example.html).
 
-## Forcing the Polyfill
+## Skipping the Polyfill
 
-By default, the polyfill checks whether the browser has working native XSLT
-support (i.e. whether `window.XSLTProcessor` exists, is native code, and can be
-constructed). If native support is present, the polyfill does **not** install
-itself, and `XSLTProcessor` remains the browser's built-in implementation.
+By default, the polyfill installs itself unconditionally, replacing
+`window.XSLTProcessor` even in browsers that have working native XSLT support.
 
-To override that behavior and always use the polyfill, regardless of the
-browser's built-in support, set `window.xsltUsePolyfillAlways` to `true`
-*before* the polyfill script runs:
+To only install the polyfill when it is actually needed (i.e. when
+`window.XSLTProcessor` is missing, isn't native code, or can't be
+constructed), set `window.xsltUsePolyfillOnlyIfNeeded` to `true` *before* the
+polyfill script runs:
 
 ```html
 <!DOCTYPE html>
-<script>window.xsltUsePolyfillAlways = true;</script>
+<script>window.xsltUsePolyfillOnlyIfNeeded = true;</script>
 <script src="xslt-polyfill.min.js" charset="utf-8"></script>
 ```
 
@@ -85,7 +84,7 @@ The same works in an XML document, as long as the `<script>` elements are in
 the XHTML namespace:
 
 ```xml
-<script xmlns="http://www.w3.org/1999/xhtml">window.xsltUsePolyfillAlways = true;</script>
+<script xmlns="http://www.w3.org/1999/xhtml">window.xsltUsePolyfillOnlyIfNeeded = true;</script>
 <script src="../xslt-polyfill.min.js" xmlns="http://www.w3.org/1999/xhtml"></script>
 ```
 
@@ -93,16 +92,16 @@ Notes:
 
 - The flag is read once, when the polyfill script executes. Setting it
   afterwards has no effect.
-- When forced, the polyfill replaces `window.XSLTProcessor` with its own
+- When installed, the polyfill replaces `window.XSLTProcessor` with its own
   implementation and exposes its helper functions
   (`xsltPolyfillReady()`, `loadXmlWithXsltFromUrl()`,
   `parseAndReplaceCurrentXMLDoc()`, etc.).
 - This also applies to the automatic transformation of an XML document
-  containing an `<?xml-stylesheet?>` processing instruction: with the flag set,
-  the polyfill performs that transformation even in a browser with native XSLT
-  support. (This only matters if the browser hasn't already transformed the
-  document natively.) Use `window.xsltDontAutoloadXmlDocs = true` to suppress
-  the automatic transformation.
+  containing an `<?xml-stylesheet?>` processing instruction: the polyfill
+  performs that transformation even in a browser with native XSLT support.
+  (This only matters if the browser hasn't already transformed the document
+  natively.) Use `window.xsltDontAutoloadXmlDocs = true` to suppress the
+  automatic transformation.
 
 ## Loading Spinner
 
@@ -171,8 +170,8 @@ Note that as of now, there are a few things that don't work perfectly:
  - For the *automatic* transformation of an XML document, you'll need to be
    running the polyfill in a browser with the native XSLT feature disabled. In
    Chrome, you can do this at `chrome://flags/#xslt`. The `XSLTProcessor` API
-   can still be forced to use the polyfill via `window.xsltUsePolyfillAlways`,
-   see [Forcing the Polyfill](#forcing-the-polyfill).
+   always uses the polyfill by default, see
+   [Skipping the Polyfill](#skipping-the-polyfill).
  - The `parseAndReplaceCurrentXMLDoc()` function will replace the contents of
    the *current* document (an `XHTML` document) with the transformed content.
    Because XHTML always renders in no-quirks mode, if the transformed (HTML)
