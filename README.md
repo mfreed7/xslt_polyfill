@@ -48,6 +48,13 @@ XSLT polyfill, and replace the page with the result of the transformation.
 The example above is available in the `test/` folder of this repo:
 [`demo.xml`](https://github.com/mfreed7/xslt_polyfill/blob/main/test/demo.xml).
 
+Note that a browser that still has native XSLT support enabled will transform this
+document natively, before any script in it can run. The `<script>` elements
+are just input to the native transform, so the polyfill never executes, and no
+flag set in the source XML can change that. This automatic transformation
+therefore only uses the polyfill in browsers without native XSLT support. See
+[Limitations](#limitations).
+
 The polyfill also provides a full implementation of the `XSLTProcessor` class,
 so that code like this will also work:
 
@@ -99,9 +106,11 @@ Notes:
 - This also applies to the automatic transformation of an XML document
   containing an `<?xml-stylesheet?>` processing instruction: the polyfill
   performs that transformation even in a browser with native XSLT support.
-  (This only matters if the browser hasn't already transformed the document
-  natively.) Use `window.xsltDontAutoloadXmlDocs = true` to suppress the
-  automatic transformation.
+  However, if the browser has native XSLT support, it will already have
+  transformed a navigated XML document natively before the polyfill script
+  gets a chance to run (see [Limitations](#limitations)). Use
+  `window.xsltDontAutoloadXmlDocs = true` to suppress the automatic
+  transformation.
 
 ## Loading Spinner
 
