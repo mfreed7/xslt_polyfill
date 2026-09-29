@@ -380,7 +380,7 @@ cleanup:
  * to get the content from the URL and then parses it into an xmlDocPtr.
  *
  * @param URI The URI of the document to load.
- * @param dict A dictionary for interning strings (not used).
+ * @param dict The dictionary to use when parsing the document.
  * @param options Parser options.
  * @param ctxt The transformation context (not used).
  * @param type The type of load (document or stylesheet).
@@ -412,7 +412,22 @@ static xmlDocPtr docLoader(const xmlChar *URI, xmlDictPtr dict, int options,
     return NULL;
   }
 
-  xmlDocPtr doc = xmlReadMemory(content, strlen(content), url, "UTF-8", XML_PARSE_HUGE);
+  // Parse using the supplied dictionary, as xsltDocDefaultLoaderFunc does.
+  // libxslt compares interned names by pointer (e.g. matching xsl:with-param
+  // to xsl:param), and an imported stylesheet adopts its document's dict, so
+  // parsing with a separate dict makes those comparisons fail.
+  xmlDocPtr doc = NULL;
+  xmlParserCtxtPtr pctxt = xmlNewParserCtxt();
+  if (pctxt) {
+    if (dict) {
+      xmlDictFree(pctxt->dict);
+      pctxt->dict = dict;
+      xmlDictReference(dict);
+    }
+    doc = xmlCtxtReadMemory(pctxt, content, strlen(content), url, "UTF-8",
+                            XML_PARSE_HUGE);
+    xmlFreeParserCtxt(pctxt);
+  }
   if (!doc) {
     printf("XSLT Transformation Error: Failed to parse included document.\n");
   }
