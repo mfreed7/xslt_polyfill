@@ -1526,6 +1526,51 @@ const testCases = [
     </xsl:stylesheet>`,
   },
   {
+    name: 'Parameters passed to imported named template',
+    xml: `<?xml version="1.0" encoding="UTF-8"?>
+        <?xml-stylesheet type="text/xsl" href="{{XSL_HREF}}"?>
+        <document>
+            {{SCRIPT_INJECTION_LOCATION}}
+            INIT
+        </document>`,
+    get xsl() {
+      // libxslt matches xsl:with-param to xsl:param by string-dict pointer, so
+      // this fails if the imported stylesheet is parsed with a different dict.
+      const importedXsl = `<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+          <xsl:template name="imported-template">
+            <xsl:param name="myParam" select="'DEFAULT'"/>
+            <xsl:choose>
+              <xsl:when test="$myParam = 'PASS'">
+                <div id="target" style="color:green">PASS</div>
+              </xsl:when>
+              <xsl:otherwise>
+                <div id="target" style="color:red">FAIL: got <xsl:value-of select="$myParam"/></div>
+              </xsl:otherwise>
+            </xsl:choose>
+          </xsl:template>
+        </xsl:stylesheet>`;
+      const importedDataUri = `data:text/xml;base64,${Buffer.from(importedXsl).toString('base64')}`;
+      // The polyfill's JS compileImports() inlines top-level xsl:import
+      // elements before libxslt sees them. Put the xsl:import inside an
+      // included stylesheet so that libxslt loads it through docLoader.
+      const includedXsl = `<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+          <xsl:import href="${importedDataUri}"/>
+        </xsl:stylesheet>`;
+      const includedDataUri = `data:text/xml;base64,${Buffer.from(includedXsl).toString('base64')}`;
+      return `<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+        <xsl:include href="${includedDataUri}"/>
+        <xsl:output method="html"/>
+        <xsl:template match="/">
+            <body>
+                <xsl:call-template name="imported-template">
+                    <xsl:with-param name="myParam" select="'PASS'"/>
+                </xsl:call-template>
+            </body>
+        </xsl:template>
+    </xsl:stylesheet>`;
+    },
+  },
+  {
     name: 'showError handles unescaped characters in message',
     xml: `<?xml version="1.0" encoding="UTF-8"?>
         <?xml-stylesheet type="text/xsl" href="{{XSL_HREF}}"?>
