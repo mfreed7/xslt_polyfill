@@ -1612,6 +1612,56 @@ const testCases = [
         </xsl:template>
     </xsl:stylesheet>`,
   },
+  {
+    name: 'Non-UTF-8 xsl:output encoding',
+    html: `
+        <!DOCTYPE html>
+        <body>
+        {{SCRIPT_INJECTION_LOCATION}}
+        <div id="target" style="color:red">INIT</div>
+        <script>
+        ${UTILITIES}
+        window.onload = () => {
+            // The encoding attribute of xsl:output only matters when the result
+            // is serialized to bytes. XSLTProcessor returns DOM nodes, so the
+            // result text must not be re-encoded into (and mangled by) that
+            // encoding.
+            const hebrew = '\\u05E9\\u05DC\\u05D5\\u05DD';
+            const expectedText = '\\u00B7' + hebrew;
+            const xml = '<root><item name="' + hebrew + '">' + hebrew + '</item></root>';
+            const failures = [];
+            const check = (label, el, hasTitle) => {
+                const text = el?.textContent;
+                const title = hasTitle ? el?.getAttribute('title') : null;
+                if (text !== expectedText || (hasTitle && title !== hebrew)) {
+                    failures.push(label + ': text=' + JSON.stringify(text) +
+                        (hasTitle ? ', title=' + JSON.stringify(title) : ''));
+                }
+            };
+            for (const method of ['xml', 'html', 'text']) {
+                const xsl = \`<?xml version="1.0" encoding="windows-1255"?>
+                    <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+                    <xsl:output method="\${method}" encoding="windows-1255"/>
+                    <xsl:template match="/">
+                        <div title="{root/item/@name}">&#183;<xsl:value-of select="root/item"/></div>
+                    </xsl:template>
+                    </xsl:stylesheet>\`;
+                const {xsltProcessor, xmlDoc} = initProcessor(xml, xsl);
+                const fragment = xsltProcessor.transformToFragment(xmlDoc, document);
+                const doc = xsltProcessor.transformToDocument(xmlDoc);
+                if (method === 'text') {
+                    check(method + ' fragment', fragment, false);
+                    check(method + ' document', doc.querySelector('pre'), false);
+                } else {
+                    check(method + ' fragment', fragment.querySelector('div'), true);
+                    check(method + ' document', doc.querySelector('div'), true);
+                }
+            }
+            setResult(failures.length === 0, failures.join('; '));
+        };
+        </script>
+        </body>`,
+  },
 ];
 
 const fs = require('fs');

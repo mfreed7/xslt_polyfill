@@ -676,19 +676,18 @@ char *transform(const char *xml_content, int xml_len, const char *xslt_content,
   // 6. Ensure the HTML meta tag for encoding is in the Chrome/Blink format.
   adjust_html_encoding_meta(result_doc, xslt_sheet);
 
-  // 7. Serialize the result document to a string.
+  // 7. Serialize the result document to a string. Like Chromium, use an
+  // output buffer with no encoder, so the result is always UTF-8. (The JS side
+  // decodes it as UTF-8.) xsltSaveResultToString() would instead convert the
+  // result to the <xsl:output encoding>, e.g. windows-1255.
   xmlChar *result_buffer = NULL;
-  int result_len = 0;
-  int bytes_written = xsltSaveResultToString(&result_buffer, &result_len,
-                                             result_doc, xslt_sheet);
-
-  if (bytes_written == 0 && result_buffer == NULL) {
-    // If the output is empty, xsltSaveResultToString might return success (0)
-    // but not allocate a buffer. We need to return an empty string, not NULL.
-    result_buffer = (xmlChar *)malloc(1);
-    if (result_buffer) {
-      result_buffer[0] = '\0';
-    }
+  xmlOutputBufferPtr output_buf = xmlAllocOutputBuffer(NULL);
+  if (output_buf) {
+    xsltSaveResultTo(output_buf, result_doc, xslt_sheet);
+    // This is an empty string (not NULL) if there was no output.
+    result_buffer = xmlStrndup(xmlOutputBufferGetContent(output_buf),
+                               (int)xmlOutputBufferGetSize(output_buf));
+    xmlOutputBufferClose(output_buf);
   }
 
   if (!result_buffer) {
