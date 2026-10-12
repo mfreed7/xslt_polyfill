@@ -593,7 +593,8 @@
               body.remove();
             }
             html?.remove();
-            fragment.append(...doc.childNodes);
+            const htmlChildren = Array.from(doc.childNodes).filter((node) => node.nodeType !== Node.DOCUMENT_TYPE_NODE);
+            fragment.append(...htmlChildren);
             resetEventHandlers(fragment);
             return fragment;
           }
