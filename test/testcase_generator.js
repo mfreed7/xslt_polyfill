@@ -1662,6 +1662,37 @@ const testCases = [
         </script>
         </body>`,
   },
+  {
+    name: 'transformToFragment with HTML DOCTYPE',
+    html: `
+        <!DOCTYPE html>
+        <body>
+        {{SCRIPT_INJECTION_LOCATION}}
+        <div id="target" style="color:red">INIT</div>
+        <script>
+        ${UTILITIES}
+        window.onload = () => {
+            const xml = \`<?xml version="1.0" encoding="utf-8"?>
+                <page>PASS</page>\`;
+            const xsl = \`<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+                <xsl:output method="html" doctype-system="about:legacy-compat"/>
+                <xsl:template match="/">
+                    <div><xsl:value-of select="/page"/></div>
+                </xsl:template>
+                </xsl:stylesheet>\`;
+            const {xsltProcessor, xmlDoc} = initProcessor(xml, xsl);
+            const fragment = xsltProcessor.transformToFragment(xmlDoc, document);
+            const hasDoctype = Array.from(fragment.childNodes).some(
+                (n) => n.nodeType === Node.DOCUMENT_TYPE_NODE
+            );
+            setResult(
+                !hasDoctype && toFlatString(fragment) === '<div>PASS</div>',
+                'fragment=' + toFlatString(fragment)
+            );
+        };
+        </script>
+        </body>`,
+  },
 ];
 
 const fs = require('fs');
