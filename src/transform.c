@@ -163,7 +163,12 @@ xslt_polyfill_compute_sort_result(xsltTransformContextPtr ctxt, xmlNodePtr sort,
 
   len = list->nodeNr;
 
-  results = (xmlXPathObjectPtr *)xmlMalloc(len * sizeof(xmlXPathObjectPtr));
+  if ((len <= 0) ||
+      ((size_t)len > (((size_t)-1) / sizeof(xmlXPathObjectPtr)))) {
+    return (NULL);
+  }
+
+  results = (xmlXPathObjectPtr *)xmlMalloc((size_t)len * sizeof(xmlXPathObjectPtr));
   if (results == NULL) {
     return (NULL);
   }
