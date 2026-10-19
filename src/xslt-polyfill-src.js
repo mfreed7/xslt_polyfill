@@ -759,6 +759,17 @@
       }
       targetElement.replaceChildren(fragment);
       resetEventHandlers(targetElement);
+      if (document instanceof XMLDocument) {
+        for (const form of targetElement.querySelectorAll('form[name]')) {
+          const name = form.getAttribute('name');
+          if (name && !(name in document)) {
+            Object.defineProperty(document, name, {
+              configurable: true,
+              get: () => form,
+            });
+          }
+        }
+      }
       if (targetElement instanceof HTMLHtmlElement) {
         // The browser's native XML viewer injects a hidden User Agent stylesheet that applies
         // rules like `white-space: nowrap` and monospace fonts. Since we are reusing the same

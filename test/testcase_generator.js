@@ -1693,6 +1693,42 @@ const testCases = [
         </script>
         </body>`,
   },
+  {
+    name: 'Named forms exposed on document',
+    xml: `<?xml version="1.0" encoding="UTF-8"?>
+        <?xml-stylesheet type="text/xsl" href="{{XSL_HREF}}"?>
+        <document>
+            {{SCRIPT_INJECTION_LOCATION}}
+            INIT
+        </document>`,
+    xsl: `<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+        <xsl:output method="html"/>
+        <xsl:template match="/">
+            <body>
+                <div id="target" style="color:red">INIT</div>
+                <form name="loginForm">
+                    <input type="text" name="username" value="admin"/>
+                </form>
+                <script>
+                    const inlineAvailable = document.loginForm instanceof HTMLFormElement &amp;&amp;
+                        document.loginForm.username.value === 'admin';
+                    document.addEventListener('DOMContentLoaded', () => {
+                        const dclAvailable = document.loginForm instanceof HTMLFormElement &amp;&amp;
+                            document.loginForm.username.value === 'admin';
+                        const target = document.getElementById('target');
+                        if (inlineAvailable &amp;&amp; dclAvailable) {
+                            target.style.color = 'green';
+                            target.textContent = 'PASS';
+                        } else {
+                            target.style.color = 'red';
+                            target.textContent = 'FAIL: inline=' + inlineAvailable + ', dcl=' + dclAvailable;
+                        }
+                    });
+                </script>
+            </body>
+        </xsl:template>
+    </xsl:stylesheet>`,
+  },
 ];
 
 const fs = require('fs');
