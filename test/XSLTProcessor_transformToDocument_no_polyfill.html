@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+
+<div id="results"></div>
+
+<script>
+const xmlString = `
+<page>
+ <message>
+  Hello World.
+ </message>
+</page>
+`;
+
+const xsltString = `
+<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+  <xsl:output method="html"/>
+  <xsl:template match="/page/message">
+    <html>
+      <body>
+        <div style="color:green"><xsl:value-of select="." /></div>
+      </body>
+    </html>
+  </xsl:template>
+</xsl:stylesheet>`;
+
+const parser = new DOMParser();
+const xmlDoc = parser.parseFromString(xmlString, "application/xml");
+const xsltDoc = parser.parseFromString(xsltString, "application/xml");
+
+const xsltProcessor = new XSLTProcessor();
+xsltProcessor.importStylesheet(xsltDoc);
+const result = xsltProcessor.transformToDocument(xmlDoc);
+document.getElementById("results").append(
+    document.importNode(result.documentElement, true));
+</script>
