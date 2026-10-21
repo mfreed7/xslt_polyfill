@@ -99,6 +99,8 @@ Notes:
 
 - The flag is read once, when the polyfill script executes. Setting it
   afterwards has no effect.
+- When the polyfill script executes, it sets `window.xsltPolyfillInstalled = true`
+  and `window.xsltPolyfillVersion` to the package version string (e.g. `'1.0.32'`).
 - When installed, the polyfill replaces `window.XSLTProcessor` with its own
   implementation and exposes its helper functions
   (`xsltPolyfillReady()`, `loadXmlWithXsltFromUrl()`,

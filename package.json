@@ -1,6 +1,6 @@
 {
   "name": "xslt-polyfill",
-  "version": "1.0.32",
+  "version": "1.0.33",
   "description": "A polyfill for browser-based XSLTProcessor and friends",
   "keywords": [
     "XSLT",
@@ -30,6 +30,7 @@
     "build:wasm": "make",
     "build:js": "node scripts/combine.js",
     "build": "npm run build:wasm && npm run build:js",
+    "prepublishOnly": "npm run build:js",
     "clean": "make clean",
     "clean:all": "make clean-libs"
   },

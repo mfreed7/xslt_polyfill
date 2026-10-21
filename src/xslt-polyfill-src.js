@@ -17,6 +17,8 @@
     return;
   }
   window.xsltPolyfillInstalled = true;
+  const xsltPolyfillVersion = '1.0.33';
+  window.xsltPolyfillVersion = xsltPolyfillVersion;
   let polyfillReadyPromiseResolve;
   let polyfillReadyPromiseReject;
   const polyfillReadyPromise = new Promise((resolve, reject) => {
@@ -1150,6 +1152,6 @@
   }
 
   if (!window.xsltPolyfillQuiet) {
-    console.log(`XSLT polyfill ${!polyfillWillLoad ? 'NOT ' : ''}installed (native supported: ${nativeSupported}).`);
+    console.log(`XSLT polyfill v${xsltPolyfillVersion} ${!polyfillWillLoad ? 'NOT ' : ''}installed (native supported: ${nativeSupported}).`);
   }
 })();
