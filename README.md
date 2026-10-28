@@ -114,6 +114,27 @@ Notes:
   `window.xsltDontAutoloadXmlDocs = true` to suppress the automatic
   transformation.
 
+## Setting Options Without Globals
+
+Code that wraps the polyfill in a function, such as a browser extension's
+content script, can declare an `xsltPolyfillOptions` object in the enclosing
+scope instead of setting the `window.*` flags. The polyfill then reads
+`xsltUsePolyfillOnlyIfNeeded`, `xsltDontAutoloadXmlDocs`, and
+`xsltPolyfillQuiet` from that object. If `xsltUsePolyfillOnlyIfNeeded` is true
+there and the browser has native XSLT support, the polyfill returns without
+touching the page: it sets no globals, including `xsltPolyfillInstalled`.
+
+```js
+(() => {
+  const xsltPolyfillOptions = {
+    xsltUsePolyfillOnlyIfNeeded: true,
+    xsltDontAutoloadXmlDocs: true,
+    xsltPolyfillQuiet: true,
+  };
+  // ...contents of xslt-polyfill.min.js...
+})();
+```
+
 ## Loading Spinner
 
 When the polyfill is used to automatically transform a page (e.g. via an
