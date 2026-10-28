@@ -16,6 +16,16 @@
   if (window.xsltPolyfillInstalled) {
     return;
   }
+  // Code that wraps the polyfill in a function (e.g. a browser extension) can
+  // declare an `xsltPolyfillOptions` object in the enclosing scope, instead of
+  // setting the `window.*` flags below. Then, if the polyfill isn't needed, it
+  // returns without touching the page.
+  const embedderOptions =
+    typeof xsltPolyfillOptions === 'object' && xsltPolyfillOptions !== null ? xsltPolyfillOptions : null;
+  if (embedderOptions?.xsltUsePolyfillOnlyIfNeeded && isNativeXsltSupported()) {
+    return;
+  }
+  const options = embedderOptions || window;
   window.xsltPolyfillInstalled = true;
   const xsltPolyfillVersion = '1.0.33';
   window.xsltPolyfillVersion = xsltPolyfillVersion;
@@ -31,10 +41,10 @@
   const defaultOnlyIfNeeded =
     // Backwards compat: `xsltUsePolyfillAlways = false` used to mean "use
     // native XSLT if it's available".
-    'xsltUsePolyfillAlways' in window && window.xsltUsePolyfillAlways === false;
-  window.xsltUsePolyfillOnlyIfNeeded =
-    'xsltUsePolyfillOnlyIfNeeded' in window ? window.xsltUsePolyfillOnlyIfNeeded : defaultOnlyIfNeeded;
-  window.xsltDontAutoloadXmlDocs = 'xsltDontAutoloadXmlDocs' in window ? window.xsltDontAutoloadXmlDocs : false;
+    'xsltUsePolyfillAlways' in options && options.xsltUsePolyfillAlways === false;
+  options.xsltUsePolyfillOnlyIfNeeded =
+    'xsltUsePolyfillOnlyIfNeeded' in options ? options.xsltUsePolyfillOnlyIfNeeded : defaultOnlyIfNeeded;
+  options.xsltDontAutoloadXmlDocs = 'xsltDontAutoloadXmlDocs' in options ? options.xsltDontAutoloadXmlDocs : false;
   let xsltPolyfillHideRequestId = 0;
   let currentSpinnerText = null;
 
@@ -133,15 +143,19 @@
   const type = document.contentType;
   const isXml = type === "text/xml" || type === "application/xml" || type.endsWith("+xml");
 
-  let nativeSupported = 'XSLTProcessor' in window && window.XSLTProcessor.toString().includes('native code');
-  if (nativeSupported) {
-    try {
-      new XSLTProcessor();
-    } catch {
-      nativeSupported = false;
+  function isNativeXsltSupported() {
+    let nativeSupported = 'XSLTProcessor' in window && window.XSLTProcessor.toString().includes('native code');
+    if (nativeSupported) {
+      try {
+        new XSLTProcessor();
+      } catch {
+        nativeSupported = false;
+      }
     }
+    return nativeSupported;
   }
-  const polyfillWillLoad = !nativeSupported || !window.xsltUsePolyfillOnlyIfNeeded;
+  let nativeSupported = isNativeXsltSupported();
+  const polyfillWillLoad = !nativeSupported || !options.xsltUsePolyfillOnlyIfNeeded;
   if (polyfillWillLoad) {
     // The polyfill
     const promiseName = 'xsltPolyfillReady';
@@ -996,13 +1010,18 @@
       if (originalInnerHTML) {
         Object.defineProperty(Element.prototype, 'innerHTML', {
           get() {
-            if (this.ownerDocument instanceof XMLDocument) {
+            if (this.ownerDocument === _polyfilledDocument) {
               if (!_htmlDoc) _htmlDoc = document.implementation.createHTMLDocument('');
               const isTemplate =
                 this.localName === 'template' && this.namespaceURI === 'http://www.w3.org/1999/xhtml';
-              const container = isTemplate
-                ? getHtmlContext('div')
-                : getHtmlContext(this.localName, this.namespaceURI);
+              // Keep the element's own namespace (even null), so that only HTML
+              // raw text elements (script, style, ...) serialize text unescaped.
+              let container;
+              try {
+                container = isTemplate ? getHtmlContext('div') : _htmlDoc.createElementNS(this.namespaceURI, this.localName);
+              } catch {
+                container = getHtmlContext('div');
+              }
               const target = isTemplate && this.content ? this.content : this;
               for (const child of target.childNodes) {
                 container.appendChild(cloneIntoHtmlDoc(child));
@@ -1138,7 +1157,8 @@
     throw new Error(errorMessage);
   }
 
-  if (polyfillWillLoad && isXml && !xsltDontAutoloadXmlDocs) {
+  const dontAutoloadXmlDocs = embedderOptions ? embedderOptions.xsltDontAutoloadXmlDocs : xsltDontAutoloadXmlDocs;
+  if (polyfillWillLoad && isXml && !dontAutoloadXmlDocs) {
     if (document.readyState === 'loading') {
       document.addEventListener(
         'DOMContentLoaded',
@@ -1152,7 +1172,7 @@
     }
   }
 
-  if (!window.xsltPolyfillQuiet) {
+  if (!options.xsltPolyfillQuiet) {
     console.log(`XSLT polyfill v${xsltPolyfillVersion} ${!polyfillWillLoad ? 'NOT ' : ''}installed (native supported: ${nativeSupported}).`);
   }
 })();

@@ -1438,6 +1438,41 @@ const testCases = [
     </xsl:stylesheet>`,
   },
   {
+    name: 'innerHTML getter keeps XML serialization outside HTML elements of the polyfilled document',
+    xml: `<?xml version="1.0" encoding="UTF-8"?>
+        <?xml-stylesheet type="text/xsl" href="{{XSL_HREF}}"?>
+        <document>
+            {{SCRIPT_INJECTION_LOCATION}}
+            INIT
+        </document>`,
+    xsl: `<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+        <xsl:output method="html"/>
+        <xsl:template match="/">
+            <body>
+                <div id="target" style="color:red">INIT</div>
+                <script>
+                    const target = document.getElementById("target");
+                    // Elements of other XML documents keep XML serialization.
+                    const other = new DOMParser().parseFromString('&lt;x&gt;&lt;br/&gt;&lt;/x&gt;', 'application/xml');
+                    const otherHtml = other.documentElement.innerHTML;
+                    const p1 = otherHtml === '&lt;br/&gt;';
+                    // Text in a non-HTML element named like a raw text element stays escaped.
+                    const s = document.createElementNS(null, 'script');
+                    s.textContent = 'a&lt;b';
+                    // (Split, so the expected value has no entity in the script text.)
+                    const p2 = s.innerHTML === 'a&amp;' + 'lt;b';
+                    if (p1 &amp;&amp; p2) {
+                        target.style.color = "green";
+                        target.textContent = "PASS";
+                    } else {
+                        target.textContent = 'FAIL: p1=' + p1 + ' (' + otherHtml + '), p2=' + p2 + ' (' + s.innerHTML + ')';
+                    }
+                </script>
+            </body>
+        </xsl:template>
+    </xsl:stylesheet>`,
+  },
+  {
     name: 'outerHTML setter on disconnected elements throws',
     xml: `<?xml version="1.0" encoding="UTF-8"?>
         <?xml-stylesheet type="text/xsl" href="{{XSL_HREF}}"?>
