@@ -1764,6 +1764,38 @@ const testCases = [
         </xsl:template>
     </xsl:stylesheet>`,
   },
+  {
+    name: 'transformToFragment XML output in an XHTML document',
+    xhtml: `<?xml version="1.0" encoding="UTF-8"?>
+        <html xmlns="http://www.w3.org/1999/xhtml">
+        <head>
+            {{SCRIPT_INJECTION_LOCATION}}
+        </head>
+        <body>
+            <div id="target" style="color:red">INIT</div>
+            <script>
+            //<![CDATA[
+            (async () => {
+                if (window.xsltPolyfillReady) await window.xsltPolyfillReady();
+                const target = document.getElementById('target');
+                const xsl = new DOMParser().parseFromString('<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform"><xsl:output method="xml"/><xsl:template match="/"><p>hi</p></xsl:template></xsl:stylesheet>', 'application/xml');
+                const processor = new XSLTProcessor();
+                processor.importStylesheet(xsl);
+                const fragment = processor.transformToFragment(new DOMParser().parseFromString('<x/>', 'application/xml'), document);
+                const el = fragment.firstElementChild;
+                // In an XML document (including XHTML), unprefixed elements in XML output have no namespace.
+                if (el && el.localName === 'p' && el.namespaceURI === null) {
+                    target.style.color = 'green';
+                    target.textContent = 'PASS';
+                } else {
+                    target.textContent = 'FAIL: ' + (el ? el.localName + ' in ' + el.namespaceURI : 'no element');
+                }
+            })();
+            //]]>
+            </script>
+        </body>
+        </html>`,
+  },
 ];
 
 const fs = require('fs');
@@ -1788,7 +1820,7 @@ testCases.forEach((testCase) => {
 
   if (!generatedTestCases[testCase.name]) {
     const testCaseEntry = { name: testCase.name };
-    ['xml', 'xsl', 'html'].forEach((ext) => {
+    ['xml', 'xsl', 'html', 'xhtml'].forEach((ext) => {
       if (testCase[ext]) {
         const fileName = `${baseName}_{{MODE}}.${ext}`;
         testCaseEntry[ext] = `generated/${fileName}`;
@@ -1801,7 +1833,7 @@ testCases.forEach((testCase) => {
     const suffix = `_${type}`;
     const scriptInjection = scriptInjections[type];
 
-    ['xml', 'xsl', 'html'].forEach((ext) => {
+    ['xml', 'xsl', 'html', 'xhtml'].forEach((ext) => {
       if (testCase[ext]) {
         let content = testCase[ext];
         const fileName = `${baseName}${suffix}.${ext}`;

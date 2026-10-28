@@ -160,7 +160,7 @@
 
   function runTest(testCase, mode) {
     const iframe = document.createElement('iframe');
-    let url = testCase.html ? testCase.html : testCase.xml;
+    let url = testCase.html || testCase.xhtml || testCase.xml;
     return { iframe, url };
   }
 
@@ -218,6 +218,9 @@
       }
       if (tc.html) {
         testCase.html = tc.html.replace('{{MODE}}', mode);
+      }
+      if (tc.xhtml) {
+        testCase.xhtml = tc.xhtml.replace('{{MODE}}', mode);
       }
       return testCase;
     });
