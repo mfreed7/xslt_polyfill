@@ -127,6 +127,12 @@
     setPolyfillSpinner(currentSpinnerText);
   }
 
+  // Whether the current document is an XML document (including XHTML). Don't
+  // use `document instanceof XMLDocument`: in Gecko, application/xhtml+xml
+  // documents are HTMLDocuments.
+  const type = document.contentType;
+  const isXml = type === "text/xml" || type === "application/xml" || type.endsWith("+xml");
+
   let nativeSupported = 'XSLTProcessor' in window && window.XSLTProcessor.toString().includes('native code');
   if (nativeSupported) {
     try {
@@ -569,10 +575,10 @@
             // It's legal for XML content to contain multiple sibling root
             // elements in transformToFragment, so wrap the content in one.
             const fakeRoot = `rootelementforparsing`;
-            const ns = document instanceof HTMLDocument ? ` xmlns="http://www.w3.org/1999/xhtml"` : '';
+            const ns = !isXml ? ` xmlns="http://www.w3.org/1999/xhtml"` : '';
             const doc = new DOMParser().parseFromString(`<${fakeRoot}${ns}>${content}</${fakeRoot}>`, mimeType);
             const rootNode = doc.querySelector(fakeRoot);
-            if (document instanceof HTMLDocument) {
+            if (!isXml) {
               lowercaseHtmlAttributes(rootNode);
             }
             fragment.append(...rootNode.childNodes);
@@ -706,14 +712,12 @@
       if (typeof newHTML !== 'string') {
         return showError('newHTML should be a string');
       }
-      if (document instanceof XMLDocument) {
+      if (isXml) {
         const htmlRoot = document.createElementNS('http://www.w3.org/1999/xhtml', 'html');
         document.documentElement.replaceWith(htmlRoot);
         unsafeReplaceDocumentWithHtml(htmlRoot, newHTML, mimeType);
-      } else if (document instanceof HTMLDocument) {
-        unsafeReplaceDocumentWithHtml(document.documentElement, newHTML, mimeType);
       } else {
-        return showError('Unknown document type');
+        unsafeReplaceDocumentWithHtml(document.documentElement, newHTML, mimeType);
       }
     }
 
@@ -725,7 +729,7 @@
       }
       // First parse the document and move content to a fragment.
       let root, parsedDoc;
-      if (mimeType === 'application/xml' && document instanceof HTMLDocument) {
+      if (mimeType === 'application/xml' && !isXml) {
         const fakeRoot = `rootelementforparsing`;
         parsedDoc = new DOMParser().parseFromString(
           `<${fakeRoot} xmlns="http://www.w3.org/1999/xhtml">${htmlString}</${fakeRoot}>`,
@@ -761,7 +765,7 @@
       }
       targetElement.replaceChildren(fragment);
       resetEventHandlers(targetElement);
-      if (document instanceof XMLDocument) {
+      if (isXml) {
         for (const form of targetElement.querySelectorAll('form[name]')) {
           const name = form.getAttribute('name');
           if (name && !(name in document)) {
@@ -906,7 +910,7 @@
     // being polyfilled, not to other XML documents (e.g. from
     // `document.implementation.createDocument()`), which must
     // keep case-sensitive, null-namespace XML behavior.
-    const _polyfilledDocument = document instanceof XMLDocument ? document : null;
+    const _polyfilledDocument = isXml ? document : null;
     const _originalCreateElement = Document.prototype.createElement;
     const _originalCreateElementNS = Document.prototype.createElementNS;
 
@@ -924,7 +928,7 @@
     Document.prototype.createElement = patchedCreateElement;
     document.createElement = patchedCreateElement;
 
-    if (document instanceof XMLDocument) {
+    if (isXml) {
       const originalTagName = Object.getOwnPropertyDescriptor(Element.prototype, 'tagName').get;
       Object.defineProperty(Element.prototype, 'tagName', {
         get() {
@@ -1134,9 +1138,6 @@
     throw new Error(errorMessage);
   }
 
-  const type = document.contentType;
-  const isXml = type === "text/xml" || type === "application/xml" || type.endsWith("+xml");
-  
   if (polyfillWillLoad && isXml && !xsltDontAutoloadXmlDocs) {
     if (document.readyState === 'loading') {
       document.addEventListener(
