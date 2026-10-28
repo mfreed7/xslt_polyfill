@@ -992,13 +992,18 @@
       if (originalInnerHTML) {
         Object.defineProperty(Element.prototype, 'innerHTML', {
           get() {
-            if (this.ownerDocument instanceof XMLDocument) {
+            if (this.ownerDocument === _polyfilledDocument) {
               if (!_htmlDoc) _htmlDoc = document.implementation.createHTMLDocument('');
               const isTemplate =
                 this.localName === 'template' && this.namespaceURI === 'http://www.w3.org/1999/xhtml';
-              const container = isTemplate
-                ? getHtmlContext('div')
-                : getHtmlContext(this.localName, this.namespaceURI);
+              // Keep the element's own namespace (even null), so that only HTML
+              // raw text elements (script, style, ...) serialize text unescaped.
+              let container;
+              try {
+                container = isTemplate ? getHtmlContext('div') : _htmlDoc.createElementNS(this.namespaceURI, this.localName);
+              } catch {
+                container = getHtmlContext('div');
+              }
               const target = isTemplate && this.content ? this.content : this;
               for (const child of target.childNodes) {
                 container.appendChild(cloneIntoHtmlDoc(child));
