@@ -29,18 +29,40 @@ const char *fetch_and_load_document(const char *url);
 // It uses Asyncify to pause the C code and wait for the async JS to complete.
 EM_JS(const char *, fetch_and_load_document, (const char *url), {
   return Asyncify.handleSleep(function(wakeUp) {
-    fetch(UTF8ToString(url))
+    var urlStr = UTF8ToString(url);
+    Promise.resolve()
+        .then(function() {
+          var resolved = new URL(urlStr, window.location.href);
+          if (resolved.protocol === 'data:') {
+            throw new Error('data: URLs are not allowed');
+          }
+          if (window.location.origin === 'null') {
+            if (window.location.protocol !== 'file:' ||
+                resolved.protocol !== 'file:') {
+              throw new Error('Cross-origin URLs are not allowed');
+            }
+          } else if (resolved.origin !== window.location.origin) {
+            throw new Error('Cross-origin URLs are not allowed');
+          }
+          return fetch(resolved.href, {mode : 'same-origin'});
+        })
         .then(function(response) {
           if (!response.ok) {
-            // Wake up the C code with a null pointer to indicate failure.
-            wakeUp(null);
-            return;
+            return null;
+          }
+          if (response.url) {
+            var finalUrl = new URL(response.url, window.location.href);
+            if (finalUrl.protocol === 'data:' ||
+                (window.location.origin !== 'null' &&
+                 finalUrl.origin !== window.location.origin)) {
+              return null;
+            }
           }
           return response.text();
         })
         .then(function(text) {
           if (text === null) {
-            wakeUp(null);
+            wakeUp(0);
             return;
           }
           // Allocate memory in the WASM heap for the fetched text
@@ -51,15 +73,10 @@ EM_JS(const char *, fetch_and_load_document, (const char *url), {
         .catch(function(err) {
           console.error(
               "XSLT Polyfill: Failed to fetch an external document included " +
-              "via <xsl:import> or <xsl:include>.\n" +
-              "URL: " + UTF8ToString(url) + "\n" +
-              "This is often due to the browser's CORS (Cross-Origin Resource " +
-              "Sharing) policy. " +
-              "This polyfill uses the standard `fetch()` API, which is more " +
-              "restrictive than a native browser's XSLT engine. " +
-              "Please check the browser's network console for more details " +
-              "about the failed request.");
-          wakeUp(null);
+              "via <xsl:import>, <xsl:include>, or document().\n" +
+              "URL: " + urlStr + "\n" +
+              "External documents must be same-origin and may not use data: URLs.");
+          wakeUp(0);
         });
   });
 });

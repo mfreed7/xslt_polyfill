@@ -182,9 +182,32 @@
         polyfillReadyPromiseReject(err);
       });
 
+    function isSameOriginAllowedUrl(url) {
+      try {
+        const resolved = new URL(url, window.location.href);
+        if (resolved.protocol === 'data:') {
+          return false;
+        }
+        if (window.location.origin === 'null') {
+          return window.location.protocol === 'file:' && resolved.protocol === 'file:';
+        }
+        return resolved.origin === window.location.origin;
+      } catch {
+        return false;
+      }
+    }
+
     async function loadDoc(fn, cache) {
-      const res = await fetch(fn, { cache: cache });
-      if (!res.ok) {
+      if (!isSameOriginAllowedUrl(fn)) {
+        return null;
+      }
+      let res;
+      try {
+        res = await fetch(fn, { mode: 'same-origin', cache: cache });
+      } catch {
+        return null;
+      }
+      if (!res.ok || (res.url && !isSameOriginAllowedUrl(res.url))) {
         return null;
       }
       const xmltext = await res.text();
@@ -437,6 +460,9 @@
         }
 
         const finishProcessing = (resultPtr) => {
+          if (!resultPtr) {
+            throw new Error(`XSLT Transformation failed. See console for details.`);
+          }
           // 5. Convert the result pointers (char*) back to JS strings.
           let resultString = readStringFromHeap(resultPtr);
           let mimeTypeString = readStringFromHeap(mimeTypePtr);
@@ -465,11 +491,19 @@
 
         if (resultPtr_or_Promise instanceof Promise) {
           // Return a Promise that resolves to the finished object
-          return resultPtr_or_Promise.then((resultPtr) => {
-            const res = finishProcessing(resultPtr);
-            cleanup();
-            return res;
-          });
+          return resultPtr_or_Promise.then(
+            (resultPtr) => {
+              try {
+                return finishProcessing(resultPtr);
+              } finally {
+                cleanup();
+              }
+            },
+            (err) => {
+              cleanup();
+              throw err;
+            },
+          );
         }
         // Not a promise - just return the finished object.
         const res = finishProcessing(resultPtr_or_Promise);

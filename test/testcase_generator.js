@@ -833,6 +833,9 @@ const testCases = [
   },
   {
     name: 'Import Attribute Merge',
+    extraFiles: {
+      'Import_Attribute_Merge_imported.xsl': `<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform" my-imported-attr="PASS"></xsl:stylesheet>`,
+    },
     xml: `<?xml version="1.0"?>
         <?xml-stylesheet type="text/xsl" href="{{XSL_HREF}}"?>
         <page>
@@ -841,7 +844,7 @@ const testCases = [
         </page>
     `,
     xsl: `<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
-        <xsl:import href="data:text/xml,&lt;xsl:stylesheet version='1.0' xmlns:xsl='http://www.w3.org/1999/XSL/Transform' my-imported-attr='PASS'&gt;&lt;/xsl:stylesheet&gt;"/>
+        <xsl:import href="./Import_Attribute_Merge_imported.xsl"/>
         <xsl:output method="html"/>
         <xsl:template match="/">
             <div style="color:green">
@@ -852,6 +855,9 @@ const testCases = [
   },
   {
     name: 'External document() call',
+    extraFiles: {
+      'External_document___call_ext.xml': '<root>PASS</root>',
+    },
     xml: `<?xml version="1.0"?>
         <?xml-stylesheet type="text/xsl" href="{{XSL_HREF}}"?>
         <page>
@@ -859,21 +865,15 @@ const testCases = [
             <message>INIT</message>
         </page>
     `,
-    get xsl() {
-      const xmlContent = '<root>PASS</root>';
-      const base64Content = Buffer.from(xmlContent).toString('base64');
-      const dataUri = `data:text/xml;base64,${base64Content}`;
-      return `<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+    xsl: `<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
         <xsl:output method="html"/>
-        <!-- Use a base64 data URI to ensure valid URI syntax for libxml2 while triggering Asyncify suspension -->
-        <xsl:variable name="external" select="document('${dataUri}')"/>
+        <xsl:variable name="external" select="document('./External_document___call_ext.xml')"/>
         <xsl:template match="/">
             <div id="target" style="color:green">
                 <xsl:value-of select="$external/root"/>
             </div>
         </xsl:template>
-        </xsl:stylesheet>`;
-    },
+        </xsl:stylesheet>`,
   },
   {
     name: 'Uppercase Attributes',
@@ -1510,6 +1510,12 @@ const testCases = [
   },
   {
     name: 'compileImports deduplicates top-level variables',
+    extraFiles: {
+      'compileImports_deduplicates_top_level_variables_imported.xsl': `<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+        <xsl:variable name="dupVar">IMPORTED</xsl:variable>
+        <xsl:variable name="uniqueImportedVar">FROM_IMPORT</xsl:variable>
+      </xsl:stylesheet>`,
+    },
     xml: `<?xml version="1.0" encoding="UTF-8"?>
         <?xml-stylesheet type="text/xsl" href="{{XSL_HREF}}"?>
         <document>
@@ -1517,7 +1523,7 @@ const testCases = [
             INIT
         </document>`,
     xsl: `<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
-        <xsl:import href="data:text/xml,&lt;xsl:stylesheet version='1.0' xmlns:xsl='http://www.w3.org/1999/XSL/Transform'&gt;&lt;xsl:variable name='dupVar'&gt;IMPORTED&lt;/xsl:variable&gt;&lt;/xsl:stylesheet&gt;"/>
+        <xsl:import href="./compileImports_deduplicates_top_level_variables_imported.xsl"/>
         <xsl:variable name="dupVar">MAIN</xsl:variable>
         <xsl:output method="html"/>
         <xsl:template match="/">
@@ -1525,12 +1531,13 @@ const testCases = [
                 <div id="target" style="color:red">INIT</div>
                 <script>
                     const val = "<xsl:value-of select="$dupVar"/>";
+                    const importedVal = "<xsl:value-of select="$uniqueImportedVar"/>";
                     const target = document.getElementById("target");
-                    if (val === "MAIN") {
+                    if (val === "MAIN" &amp;&amp; importedVal === "FROM_IMPORT") {
                         target.style.color = "green";
                         target.textContent = "PASS";
                     } else {
-                        target.textContent = "FAIL: got " + val;
+                        target.textContent = "FAIL: got dupVar=" + val + ", uniqueImportedVar=" + importedVal;
                     }
                 </script>
             </body>
@@ -1539,6 +1546,9 @@ const testCases = [
   },
   {
     name: 'compileImports skips parsererror documents',
+    extraFiles: {
+      'compileImports_skips_parsererror_documents_broken.xsl': `<broken-xml-not-closed>`,
+    },
     xml: `<?xml version="1.0" encoding="UTF-8"?>
         <?xml-stylesheet type="text/xsl" href="{{XSL_HREF}}"?>
         <document>
@@ -1546,7 +1556,7 @@ const testCases = [
             INIT
         </document>`,
     xsl: `<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
-        <xsl:import href="data:text/xml,&lt;broken-xml-not-closed&gt;"/>
+        <xsl:import href="./compileImports_skips_parsererror_documents_broken.xsl"/>
         <xsl:output method="html"/>
         <xsl:template match="/">
             <body>
@@ -1562,16 +1572,8 @@ const testCases = [
   },
   {
     name: 'Parameters passed to imported named template',
-    xml: `<?xml version="1.0" encoding="UTF-8"?>
-        <?xml-stylesheet type="text/xsl" href="{{XSL_HREF}}"?>
-        <document>
-            {{SCRIPT_INJECTION_LOCATION}}
-            INIT
-        </document>`,
-    get xsl() {
-      // libxslt matches xsl:with-param to xsl:param by string-dict pointer, so
-      // this fails if the imported stylesheet is parsed with a different dict.
-      const importedXsl = `<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+    extraFiles: {
+      'Parameters_passed_to_imported_named_template_imported.xsl': `<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
           <xsl:template name="imported-template">
             <xsl:param name="myParam" select="'DEFAULT'"/>
             <xsl:choose>
@@ -1583,17 +1585,19 @@ const testCases = [
               </xsl:otherwise>
             </xsl:choose>
           </xsl:template>
-        </xsl:stylesheet>`;
-      const importedDataUri = `data:text/xml;base64,${Buffer.from(importedXsl).toString('base64')}`;
-      // The polyfill's JS compileImports() inlines top-level xsl:import
-      // elements before libxslt sees them. Put the xsl:import inside an
-      // included stylesheet so that libxslt loads it through docLoader.
-      const includedXsl = `<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
-          <xsl:import href="${importedDataUri}"/>
-        </xsl:stylesheet>`;
-      const includedDataUri = `data:text/xml;base64,${Buffer.from(includedXsl).toString('base64')}`;
-      return `<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
-        <xsl:include href="${includedDataUri}"/>
+        </xsl:stylesheet>`,
+      'Parameters_passed_to_imported_named_template_included.xsl': `<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+          <xsl:import href="./Parameters_passed_to_imported_named_template_imported.xsl"/>
+        </xsl:stylesheet>`,
+    },
+    xml: `<?xml version="1.0" encoding="UTF-8"?>
+        <?xml-stylesheet type="text/xsl" href="{{XSL_HREF}}"?>
+        <document>
+            {{SCRIPT_INJECTION_LOCATION}}
+            INIT
+        </document>`,
+    xsl: `<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+        <xsl:include href="./Parameters_passed_to_imported_named_template_included.xsl"/>
         <xsl:output method="html"/>
         <xsl:template match="/">
             <body>
@@ -1602,8 +1606,7 @@ const testCases = [
                 </xsl:call-template>
             </body>
         </xsl:template>
-    </xsl:stylesheet>`;
-    },
+    </xsl:stylesheet>`,
   },
   {
     name: 'showError handles unescaped characters in message',
@@ -1833,8 +1836,8 @@ const testCases = [
   },
   {
     name: 'Non-prolog xml-stylesheet ignored',
-    get xhtml() {
-      const evilXsl = `<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+    extraFiles: {
+      'Non_prolog_xml_stylesheet_ignored_evil.xsl': `<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
         <xsl:output method="html"/>
         <xsl:template match="/">
           <html><body>
@@ -1842,8 +1845,10 @@ const testCases = [
             <script>window.stylesheetExecuted = true;</script>
           </body></html>
         </xsl:template>
-      </xsl:stylesheet>`;
-      const evilHref = `data:text/xml;base64,${Buffer.from(evilXsl).toString('base64')}`;
+      </xsl:stylesheet>`,
+    },
+    get xhtml() {
+      const evilHref = './Non_prolog_xml_stylesheet_ignored_evil.xsl';
       return `<?xml version="1.0" encoding="UTF-8"?>
         <!-- <?xml-stylesheet type="text/xsl" href="${evilHref}"?> -->
         <html xmlns="http://www.w3.org/1999/xhtml">
@@ -1883,6 +1888,245 @@ const testCases = [
         <?xml-stylesheet type="text/xsl" href="${evilHref}"?>`;
     },
   },
+  {
+    name: 'Reject cross-origin and data URLs',
+    get extraFiles() {
+      const evilXsl = `<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+        <xsl:output method="html"/>
+        <xsl:template match="/">
+          <html><body>
+            <div id="target" style="color:red">FAIL: disallowed stylesheet applied</div>
+            <script>window.disallowedStylesheetExecuted = true;</script>
+          </body></html>
+        </xsl:template>
+      </xsl:stylesheet>`;
+      const evilDataUri = `data:text/xml;base64,${Buffer.from(evilXsl).toString('base64')}`;
+
+      const dataImportXsl = `<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+        <xsl:template match="import-check">LEAKED_DATA_IMPORT</xsl:template>
+      </xsl:stylesheet>`;
+      const dataImportUri = `data:text/xml;base64,${Buffer.from(dataImportXsl).toString('base64')}`;
+
+      const dataDocXml = `<secret>LEAKED_DATA_DOC</secret>`;
+      const dataDocUri = `data:text/xml;base64,${Buffer.from(dataDocXml).toString('base64')}`;
+
+      const includeDataXsl = `<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+        <xsl:include href="${evilDataUri}"/>
+        <xsl:output method="html"/>
+      </xsl:stylesheet>`;
+
+      const hostXsl = `<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+        <xsl:import href="${dataImportUri}"/>
+        <xsl:output method="html"/>
+        <xsl:variable name="dataDoc" select="document('${dataDocUri}')"/>
+        <xsl:variable name="crossDoc" select="document(/root/cross-doc)"/>
+        <xsl:variable name="sameDoc" select="document('./Reject_cross_origin_and_data_URLs_doc.xml')"/>
+        <xsl:template match="/">
+          <html><body>
+            <div id="result" style="display:none"
+                 data-import="{normalize-space(/root/import-check)}"
+                 data-doc="{normalize-space($dataDoc)}"
+                 cross-doc="{normalize-space($crossDoc)}"
+                 same-doc="{normalize-space($sameDoc)}">
+              <xsl:apply-templates select="/root/import-check"/>
+            </div>
+            <div id="target" style="color:red">INIT</div>
+          </body></html>
+        </xsl:template>
+      </xsl:stylesheet>`;
+
+      return {
+        'Reject_cross_origin_and_data_URLs_evil.xsl': evilXsl,
+        'Reject_cross_origin_and_data_URLs_include_data.xsl': includeDataXsl,
+        'Reject_cross_origin_and_data_URLs_host.xsl': hostXsl,
+        'Reject_cross_origin_and_data_URLs_doc.xml': '<secret>ALLOWED_DOC</secret>',
+      };
+    },
+    get xhtml() {
+      const evilXsl = `<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+        <xsl:output method="html"/>
+        <xsl:template match="/">
+          <html><body>
+            <div id="target" style="color:red">FAIL: disallowed stylesheet applied</div>
+            <script>window.disallowedStylesheetExecuted = true;</script>
+          </body></html>
+        </xsl:template>
+      </xsl:stylesheet>`;
+      const evilDataUri = `data:text/xml;base64,${Buffer.from(evilXsl).toString('base64')}`;
+
+      return `<?xml version="1.0" encoding="UTF-8"?>
+        <html xmlns="http://www.w3.org/1999/xhtml">
+        <head>
+            {{SCRIPT_INJECTION_LOCATION}}
+        </head>
+        <body>
+            <div id="target" style="color:red">INIT</div>
+            <script>
+            //<![CDATA[
+            window.addEventListener('DOMContentLoaded', async () => {
+                if (!window.xsltPolyfillReady) {
+                    const target = document.getElementById('target');
+                    target.style.color = 'green';
+                    target.textContent = 'PASS';
+                    return;
+                }
+                await window.xsltPolyfillReady();
+
+                const crossOriginUrl = (rel) => {
+                    const u = new URL(rel, location.href);
+                    u.hostname = u.hostname === 'localhost' ? '127.0.0.1' : 'localhost';
+                    return u.href;
+                };
+
+                const failures = [];
+                const savedNodes = Array.from(document.documentElement.childNodes).map((n) => n.cloneNode(true));
+                const restoreDom = () => {
+                    document.documentElement.replaceChildren(...savedNodes.map((n) => n.cloneNode(true)));
+                };
+
+                // Track fetch() calls to ensure mode: 'same-origin' is always used.
+                const origFetch = window.fetch;
+                const fetchModes = [];
+                window.fetch = function(resource, init) {
+                    fetchModes.push({ url: String(resource), mode: init && init.mode });
+                    return origFetch.apply(this, arguments);
+                };
+
+                // 1. Reject data: URL in <?xml-stylesheet?>
+                const dataPiXml = '<?xml version="1.0"?><?xml-stylesheet type="text/xsl" href="${evilDataUri}"?><root/>';
+                let dataPiThrew = false;
+                try {
+                    await window.loadXmlWithXsltFromBytes(new TextEncoder().encode(dataPiXml), location.href);
+                } catch {
+                    dataPiThrew = true;
+                }
+                restoreDom();
+                if (!dataPiThrew || window.disallowedStylesheetExecuted) {
+                    failures.push('data: PI stylesheet was not rejected');
+                }
+
+                // 2. Reject cross-origin URL in <?xml-stylesheet?>
+                window.disallowedStylesheetExecuted = false;
+                const crossPiHref = crossOriginUrl('./Reject_cross_origin_and_data_URLs_evil.xsl');
+                const crossPiXml = '<?xml version="1.0"?><?xml-stylesheet type="text/xsl" href="' + crossPiHref + '"?><root/>';
+                let crossPiThrew = false;
+                try {
+                    await window.loadXmlWithXsltFromBytes(new TextEncoder().encode(crossPiXml), location.href);
+                } catch {
+                    crossPiThrew = true;
+                }
+                restoreDom();
+                if (!crossPiThrew || window.disallowedStylesheetExecuted) {
+                    failures.push('cross-origin PI stylesheet was not rejected');
+                }
+
+                // 3. Reject data: URL in <xsl:include>
+                window.disallowedStylesheetExecuted = false;
+                const includeDataXml = '<?xml version="1.0"?><?xml-stylesheet type="text/xsl" href="./Reject_cross_origin_and_data_URLs_include_data.xsl"?><root/>';
+                let includeDataThrew = false;
+                try {
+                    await window.loadXmlWithXsltFromBytes(new TextEncoder().encode(includeDataXml), location.href);
+                } catch {
+                    includeDataThrew = true;
+                }
+                restoreDom();
+                if (!includeDataThrew || window.disallowedStylesheetExecuted) {
+                    failures.push('data: xsl:include was not rejected');
+                }
+
+                // 4. Reject cross-origin URL in <xsl:include> and <xsl:import>
+                window.disallowedStylesheetExecuted = false;
+                const crossIncludeBlob = URL.createObjectURL(new Blob([
+                    '<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">' +
+                    '<xsl:include href="' + crossPiHref + '"/>' +
+                    '</xsl:stylesheet>'
+                ], { type: 'text/xml' }));
+                let crossIncludeThrew = false;
+                try {
+                    const xml = '<?xml version="1.0"?><?xml-stylesheet type="text/xsl" href="' + crossIncludeBlob + '"?><root/>';
+                    await window.loadXmlWithXsltFromBytes(new TextEncoder().encode(xml), location.href);
+                } catch {
+                    crossIncludeThrew = true;
+                }
+                URL.revokeObjectURL(crossIncludeBlob);
+                restoreDom();
+                if (!crossIncludeThrew || window.disallowedStylesheetExecuted) {
+                    failures.push('cross-origin xsl:include was not rejected');
+                }
+
+                window.disallowedStylesheetExecuted = false;
+                const crossImportBlob = URL.createObjectURL(new Blob([
+                    '<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">' +
+                    '<xsl:import href="' + crossPiHref + '"/>' +
+                    '<xsl:output method="html"/>' +
+                    '<xsl:template match="/"><html><body><div id="target" style="color:red">INIT</div></body></html></xsl:template>' +
+                    '</xsl:stylesheet>'
+                ], { type: 'text/xml' }));
+                try {
+                    const xml = '<?xml version="1.0"?><?xml-stylesheet type="text/xsl" href="' + crossImportBlob + '"?><root/>';
+                    await window.loadXmlWithXsltFromBytes(new TextEncoder().encode(xml), location.href);
+                } catch (e) {
+                    failures.push('cross-origin xsl:import threw: ' + e.message);
+                }
+                URL.revokeObjectURL(crossImportBlob);
+                restoreDom();
+                if (window.disallowedStylesheetExecuted) {
+                    failures.push('cross-origin xsl:import was not rejected');
+                }
+
+                // 5. Reject data: <xsl:import>, data: document(), and cross-origin document(), while allowing same-origin document()
+                fetchModes.length = 0;
+                const crossDocHref = crossOriginUrl('./Reject_cross_origin_and_data_URLs_doc.xml');
+                const hostXml = '<?xml version="1.0"?><?xml-stylesheet type="text/xsl" href="./Reject_cross_origin_and_data_URLs_host.xsl"?>' +
+                    '<root><import-check>SAFE_IMPORT</import-check><cross-doc>' + crossDocHref + '</cross-doc></root>';
+                try {
+                    await window.loadXmlWithXsltFromBytes(new TextEncoder().encode(hostXml), location.href);
+                    const resultEl = document.getElementById('result');
+                    if (!resultEl) {
+                        failures.push('host transform produced no #result');
+                    } else {
+                        const importText = resultEl.textContent.trim();
+                        const dataDoc = resultEl.getAttribute('data-doc');
+                        const crossDoc = resultEl.getAttribute('cross-doc');
+                        const sameDoc = resultEl.getAttribute('same-doc');
+                        if (importText !== 'SAFE_IMPORT') {
+                            failures.push('data: xsl:import applied: ' + importText);
+                        }
+                        if (dataDoc !== '') {
+                            failures.push('data: document() loaded: ' + dataDoc);
+                        }
+                        if (crossDoc !== '') {
+                            failures.push('cross-origin document() loaded: ' + crossDoc);
+                        }
+                        if (sameDoc !== 'ALLOWED_DOC') {
+                            failures.push('same-origin document() failed: ' + sameDoc);
+                        }
+                    }
+                } catch (e) {
+                    restoreDom();
+                    failures.push('host transform threw: ' + e.message);
+                }
+
+                if (fetchModes.length === 0 || fetchModes.some((f) => f.mode !== 'same-origin')) {
+                    failures.push('fetch called without mode="same-origin": ' + JSON.stringify(fetchModes));
+                }
+
+                window.fetch = origFetch;
+                const target = document.getElementById('target');
+                if (failures.length === 0) {
+                    target.style.color = 'green';
+                    target.textContent = 'PASS';
+                } else {
+                    target.style.color = 'red';
+                    target.textContent = 'FAIL: ' + failures.join('; ');
+                }
+            }, { once: true });
+            //]]>
+            </script>
+        </body>
+        </html>`;
+    },
+  },
 ];
 
 const fs = require('fs');
@@ -1914,6 +2158,14 @@ testCases.forEach((testCase) => {
       }
     });
     generatedTestCases[testCase.name] = testCaseEntry;
+  }
+
+  if (testCase.extraFiles) {
+    Object.entries(testCase.extraFiles).forEach(([extraName, extraContent]) => {
+      const extraPath = path.join(outputDir, extraName);
+      fs.writeFileSync(extraPath, extraContent.trim());
+      console.log(`Generated ${extraPath}`);
+    });
   }
 
   Object.keys(scriptInjections).forEach((type) => {
