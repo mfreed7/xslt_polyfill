@@ -1744,7 +1744,7 @@ const testCases = [
         <xsl:template match="/">
             <body>
                 <div id="target" style="color:red">INIT</div>
-                <form name="loginForm">
+                <form name="loginForm" style="display:none">
                     <input type="text" name="username" value="admin"/>
                 </form>
                 <script>
