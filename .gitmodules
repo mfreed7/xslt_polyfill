@@ -1,6 +1,8 @@
 [submodule "src/libxslt"]
 	path = src/libxslt
 	url = https://github.com/GNOME/libxslt.git
+	ignore = untracked
 [submodule "src/libxml2"]
 	path = src/libxml2
 	url = https://github.com/GNOME/libxml2
+	ignore = untracked

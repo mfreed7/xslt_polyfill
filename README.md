@@ -184,10 +184,11 @@ standards-compliant XSLT 1.0 engine.
   document's content with the result.
 - **Resource Fetching**: All external resources, including the XSLT itself and
   any files referenced via `<xsl:import>`, `<xsl:include>`, or `document()`, are
-  fetched using the `fetch()` API and are thus subject to CORS. The source
-  document is re-fetched to ensure the WebAssembly engine receives the clean,
-  original byte stream, avoiding any modifications or tag stripping introduced
-  by the browser's initial XML parsing.
+  fetched using the `fetch()` API in `same-origin` mode (cross-origin and
+  `data:` URLs are blocked, even with CORS headers, matching Chrome's native
+  XSLT behavior). The source document is re-fetched to ensure the WebAssembly
+  engine receives the clean, original byte stream, avoiding any modifications or
+  tag stripping introduced by the browser's initial XML parsing.
 - **Script Execution**: To ensure functionality in the transformed output, the
   polyfill manually re-creates and executes `<script>` elements and fires
   synthetic `DOMContentLoaded` and `load` events.
@@ -220,11 +221,11 @@ Note that as of now, there are a few things that don't work perfectly:
    document mentioned above, some things need to be monkeypatched by this
    polyfill. For example, `document.createElement()` is patched so that it
    creates elements in the XHTML namespace.
- - Since the polyfill uses the Fetch API to request any additional resources
-   linked via `<xsl:include>` or `<xsl:import>` in the XML source, these
-   requests are subject to CORS, which might block the request. The browser-
-   native XSLT processor is able to load these resources, despite the CORS
-   violation, leading to a behavior difference.
+ - The polyfill uses the Fetch API in `same-origin` mode to request stylesheets
+   and any additional resources linked via `<xsl:include>`, `<xsl:import>`, or
+   `document()`. Cross-origin and `data:` URLs are blocked (even if CORS headers
+   are present). This matches Chrome's native XSLT processor, though some other
+   browsers (such as Firefox) allow CORS-enabled cross-origin XSLT resources.
  - Similarly, since fetch() needs to be used for included/imported resources,
    and the fetch API is asynchronous, the (synchronous) XSLTProcessor methods
    will fail in this case. I don't have a great solution for this, other than
