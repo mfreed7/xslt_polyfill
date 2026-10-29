@@ -7,6 +7,7 @@
 // Libxml2 and Libxslt headers
 #include <libexslt/exslt.h>
 #include <libxml/parser.h>
+#include <libxml/parserInternals.h>
 #include <libxml/tree.h>
 #include <libxml/xmlstring.h>
 #include <libxml/xpath.h>
@@ -560,6 +561,72 @@ static void adjust_html_encoding_meta(xmlDocPtr doc, xsltStylesheetPtr style) {
   }
 }
 
+// In libxml2's HTML serializer (htmlNodeDumpInternal in HTMLtree.c), entering
+// a raw-text element like <script> or <style> sets `isRaw = 1`, but finishing
+// any child element inside it (e.g. an unescaped <div> inside a JS template
+// literal in <script>) unconditionally resets `isRaw = 0` for all subsequent
+// sibling text nodes of the <script>. Mark text nodes inside HTML <script> and
+// <style> elements with `xmlStringTextNoenc` so libxml2 keeps writing them
+// unescaped.
+static void mark_raw_text_descendants(xmlNodePtr root) {
+  xmlNodePtr cur = root->children;
+  while (cur != NULL) {
+    if (cur->type == XML_TEXT_NODE) {
+      cur->name = xmlStringTextNoenc;
+    }
+    if (cur->children != NULL) {
+      cur = cur->children;
+      continue;
+    }
+    while (cur != root) {
+      if (cur->next != NULL) {
+        cur = cur->next;
+        break;
+      }
+      cur = cur->parent;
+    }
+    if (cur == root)
+      break;
+  }
+}
+
+static void preserve_html_raw_text_elements(xmlDocPtr doc,
+                                            xsltStylesheetPtr style) {
+  const xmlChar *method;
+  XSLT_GET_IMPORT_PTR(method, style, method);
+
+  if ((method == NULL) && (doc->type == XML_HTML_DOCUMENT_NODE))
+    method = (const xmlChar *)"html";
+
+  if (method == NULL || !xmlStrEqual(method, (const xmlChar *)"html")) {
+    return;
+  }
+
+  xmlNodePtr cur = doc->children;
+  while (cur != NULL) {
+    if (cur->type == XML_ELEMENT_NODE && cur->ns == NULL &&
+        cur->name != NULL &&
+        (xmlStrcasecmp(cur->name, (const xmlChar *)"script") == 0 ||
+         xmlStrcasecmp(cur->name, (const xmlChar *)"style") == 0)) {
+      mark_raw_text_descendants(cur);
+    } else if (cur->children != NULL) {
+      cur = cur->children;
+      continue;
+    }
+    while (cur != NULL) {
+      if (cur->next != NULL) {
+        cur = cur->next;
+        break;
+      }
+      cur = cur->parent;
+      if (cur == (xmlNodePtr)doc) {
+        cur = NULL;
+        break;
+      }
+    }
+  }
+}
+
 /**
  * @brief Transforms an XML string using an XSLT string.
  *
@@ -690,8 +757,10 @@ char *transform(const char *xml_content, int xml_len, const char *xslt_content,
   strncpy(out_mime_type, mime, 32);
   out_mime_type[31] = '\0';
 
-  // 6. Ensure the HTML meta tag for encoding is in the Chrome/Blink format.
+  // 6. Ensure the HTML meta tag for encoding is in the Chrome/Blink format,
+  // and preserve raw text inside HTML <script> and <style> elements.
   adjust_html_encoding_meta(result_doc, xslt_sheet);
+  preserve_html_raw_text_elements(result_doc, xslt_sheet);
 
   // 7. Serialize the result document to a string. Like Chromium, use an
   // output buffer with no encoder, so the result is always UTF-8. (The JS side

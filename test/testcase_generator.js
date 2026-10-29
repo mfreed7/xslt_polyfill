@@ -1835,6 +1835,43 @@ const testCases = [
     </xsl:stylesheet>`,
   },
   {
+    name: 'Script with child elements preserves raw text',
+    xml: `<?xml version="1.0" encoding="UTF-8"?>
+        <?xml-stylesheet type="text/xsl" href="{{XSL_HREF}}"?>
+        <root>
+            {{SCRIPT_INJECTION_LOCATION}}
+            <name>&amp;quot;;window.injected=1;//</name>
+        </root>`,
+    xsl: `<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+        <xsl:output method="html"/>
+        <xsl:template match="/">
+            <html>
+                <body>
+                    <div id="target" style="color:red">INIT</div>
+                    <script>
+                        window.injected = 0;
+                        const markup = \`<div class="legend-item"><span>\${1 &amp;&amp; 2}</span></div>\`;
+                        window.got = "<xsl:value-of select="translate(root/name, '&quot;', '')"/>";
+                        const target = document.getElementById('target');
+                        const expected = '&amp;' + 'quot;;window.injected=1;//';
+                        let sum = 0;
+                        for (let i = 0; i &lt; 3; i++) {
+                            sum += i;
+                        }
+                        if (window.injected === 0 &amp;&amp; window.got === expected &amp;&amp; sum === 3 &amp;&amp; markup.includes('<span>2</span>')) {
+                            target.style.color = 'green';
+                            target.textContent = 'PASS';
+                        } else {
+                            target.style.color = 'red';
+                            target.textContent = 'FAIL: injected=' + window.injected + ', got=' + window.got + ', sum=' + sum + ', markup=' + markup;
+                        }
+                    </script>
+                </body>
+            </html>
+        </xsl:template>
+    </xsl:stylesheet>`,
+  },
+  {
     name: 'Non-prolog xml-stylesheet ignored',
     extraFiles: {
       'Non_prolog_xml_stylesheet_ignored_evil.xsl': `<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
