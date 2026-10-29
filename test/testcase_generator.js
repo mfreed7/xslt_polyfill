@@ -1831,6 +1831,58 @@ const testCases = [
         </xsl:template>
     </xsl:stylesheet>`,
   },
+  {
+    name: 'Non-prolog xml-stylesheet ignored',
+    get xhtml() {
+      const evilXsl = `<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+        <xsl:output method="html"/>
+        <xsl:template match="/">
+          <html><body>
+            <div id="target" style="color:red">FAIL: non-prolog stylesheet applied</div>
+            <script>window.stylesheetExecuted = true;</script>
+          </body></html>
+        </xsl:template>
+      </xsl:stylesheet>`;
+      const evilHref = `data:text/xml;base64,${Buffer.from(evilXsl).toString('base64')}`;
+      return `<?xml version="1.0" encoding="UTF-8"?>
+        <!-- <?xml-stylesheet type="text/xsl" href="${evilHref}"?> -->
+        <html xmlns="http://www.w3.org/1999/xhtml">
+        <head>
+            {{SCRIPT_INJECTION_LOCATION}}
+        </head>
+        <body>
+            <?xml-stylesheet type="text/xsl" href="${evilHref}"?>
+            <div style="display:none"><![CDATA[<?xml-stylesheet type="text/xsl" href="${evilHref}"?>]]></div>
+            <div id="target" style="color:red">INIT</div>
+            <script>
+            //<![CDATA[
+            window.addEventListener('DOMContentLoaded', async () => {
+                const href = "${evilHref}";
+                const cases = [
+                    '<?xml version="1.0"?><rss><channel><title><![CDATA[<?xml-stylesheet type="text/xsl" href="' + href + '"?>]]]]><![CDATA[></title></channel></rss>',
+                    '<?xml version="1.0"?><!-- <?xml-stylesheet type="text/xsl" href="' + href + '"?> --><rss><channel><title>feed</title></channel></rss>',
+                    '<?xml version="1.0"?><rss><channel><title><?xml-stylesheet type="text/xsl" href="' + href + '"?></title></channel></rss>',
+                    '<?xml version="1.0"?><rss><channel><title>feed</title></channel></rss><?xml-stylesheet type="text/xsl" href="' + href + '"?>',
+                ];
+                if (window.xsltPolyfillReady) {
+                    await window.xsltPolyfillReady();
+                    for (const xml of cases) {
+                        await window.loadXmlWithXsltFromBytes(new TextEncoder().encode(xml), location.href);
+                    }
+                }
+                const target = document.getElementById('target');
+                if (target && !window.stylesheetExecuted) {
+                    target.style.color = 'green';
+                    target.textContent = 'PASS';
+                }
+            }, { once: true });
+            //]]>
+            </script>
+        </body>
+        </html>
+        <?xml-stylesheet type="text/xsl" href="${evilHref}"?>`;
+    },
+  },
 ];
 
 const fs = require('fs');

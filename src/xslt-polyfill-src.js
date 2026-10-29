@@ -660,28 +660,45 @@
       return new URL(url, window.location.href).href;
     }
 
+    function findXsltPathInProlog(xmlDoc) {
+      if (!xmlDoc) return null;
+      for (const node of xmlDoc.childNodes) {
+        if (node === xmlDoc.documentElement || node.nodeType === Node.ELEMENT_NODE) {
+          break;
+        }
+        if (node.nodeType === Node.PROCESSING_INSTRUCTION_NODE && node.target === 'xml-stylesheet') {
+          const piData = node.data;
+          const hrefMatch = piData.match(/href\s*=\s*(["'])(.*?)\1/)?.[2];
+          const typeMatch = piData.match(/type\s*=\s*(["'])(.*?)\1/)?.[2]?.toLowerCase();
+          if (hrefMatch && (typeMatch === 'text/xsl' || typeMatch === 'application/xslt+xml')) {
+            // Decode HTML entities from the path.
+            return hrefMatch
+              .replace(/&lt;/g, '<')
+              .replace(/&gt;/g, '>')
+              .replace(/&quot;/g, '"')
+              .replace(/&apos;/g, "'")
+              .replace(/&amp;/g, '&');
+          }
+        }
+      }
+      return null;
+    }
+
     async function loadXmlWithXsltFromBytes(xmlBytes, xmlUrl) {
       xmlUrl = absoluteUrl(xmlUrl);
-      // Look inside XML file for a processing instruction with an XSLT file.
-      // We decode only a small chunk at the beginning for safety and performance.
-      const decoder = new TextDecoder();
-      const xmlTextChunk = decoder.decode(xmlBytes.subarray(0, 2048));
-
+      // Look inside the XML prolog for a processing instruction with an XSLT file.
+      // Decode only a small chunk at the beginning for performance, isolate the
+      // prolog (before the root element), and parse it with DOMParser so only real
+      // prolog ProcessingInstruction nodes (and not comments/CDATA/body PIs) match.
+      const xmlTextChunk = textDecoder.decode(xmlBytes.subarray(0, 2048));
       let xsltPath = null;
-      const piMatches = xmlTextChunk.matchAll(/<\?xml-stylesheet\s+([^>]*?)\?>/g);
-      for (const piMatch of piMatches) {
-        const piData = piMatch[1];
-        const hrefMatch = piData.match(/href\s*=\s*(["'])(.*?)\1/)?.[2];
-        const typeMatch = piData.match(/type\s*=\s*(["'])(.*?)\1/)?.[2]?.toLowerCase();
-        if (hrefMatch && (typeMatch === 'text/xsl' || typeMatch === 'application/xslt+xml')) {
-          // Decode HTML entities from the path.
-          xsltPath = hrefMatch
-            .replace(/&lt;/g, '<')
-            .replace(/&gt;/g, '>')
-            .replace(/&quot;/g, '"')
-            .replace(/&apos;/g, "'")
-            .replace(/&amp;/g, '&');
-          break;
+      if (xmlTextChunk.includes('<?xml-stylesheet')) {
+        const prologMatch = xmlTextChunk.match(
+          /^(?:\uFEFF)?(?:\s+|<!--[\s\S]*?-->|<\?[\s\S]*?\?>|<!DOCTYPE[^\[>]*(\[[\s\S]*?\])?\s*>)+/i,
+        );
+        if (prologMatch) {
+          const xmlDoc = new DOMParser().parseFromString(prologMatch[0] + '<r/>', 'application/xml');
+          xsltPath = findXsltPathInProlog(xmlDoc);
         }
       }
 
@@ -1106,6 +1123,10 @@
       }
     }
     function parseAndReplaceCurrentXMLDoc(doc) {
+      if (!findXsltPathInProlog(doc)) {
+        setPolyfillSpinner(null);
+        return;
+      }
       const xml = new XMLSerializer().serializeToString(doc);
       const xmlBytes = new TextEncoder().encode(xml);
       xsltPolyfillReady()
