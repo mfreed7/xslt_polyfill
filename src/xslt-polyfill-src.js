@@ -27,7 +27,7 @@
   }
   const options = embedderOptions || window;
   window.xsltPolyfillInstalled = true;
-  const xsltPolyfillVersion = '1.0.33';
+  const xsltPolyfillVersion = '1.0.34';
   window.xsltPolyfillVersion = xsltPolyfillVersion;
   let polyfillReadyPromiseResolve;
   let polyfillReadyPromiseReject;
