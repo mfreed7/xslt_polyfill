@@ -761,7 +761,6 @@
       }
       // Scripts need to be re-created, so they will execute:
       const scripts = Array.from(fragment.querySelectorAll('script'));
-      const textArea = document.createElementNS('http://www.w3.org/1999/xhtml', 'textarea');
       const scriptMarkers = scripts.map((oldScript) => {
         const marker = document.createComment(' script placeholder ');
         oldScript.parentNode.replaceChild(marker, oldScript);
@@ -895,18 +894,7 @@
             newScript.addEventListener('load', resolvePromise, { once: true });
             newScript.addEventListener('error', resolvePromise, { once: true });
           }
-          // Because the original XSLT doc is serialized with
-          // `XMLSerializer().serializeToString(compiledXsltDoc)` above, the
-          // contents of the script will have been treated as XML children of the
-          // <script> node, meaning special characters *might* have been escaped.
-          // E.g. `foo => bar` might have been turned into `foo =&gt; bar`. But
-          // also, the source script might have been written with special
-          // characters already escaped, e.g. `new RegExp("[\\?&amp;]");`. We use
-          // the textarea trick to handle both. But we have to use
-          // setHTMLUnsafe() and not innerHTML, because the latter will invoke
-          // the XML parser, which doesn't like unescaped things like `&`.
-          textArea.setHTMLUnsafe(oldScript.textContent);
-          newScript.textContent = textArea.value;
+          newScript.textContent = oldScript.textContent;
           marker.parentNode.replaceChild(newScript, marker);
           if (isBlocking) {
             await promise;

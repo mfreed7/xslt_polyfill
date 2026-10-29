@@ -1796,6 +1796,41 @@ const testCases = [
         </body>
         </html>`,
   },
+  {
+    name: 'Script text does not double-decode entities',
+    xml: `<?xml version="1.0" encoding="UTF-8"?>
+        <?xml-stylesheet type="text/xsl" href="{{XSL_HREF}}"?>
+        <root>
+            {{SCRIPT_INJECTION_LOCATION}}
+            <name>&amp;quot;;window.injected=1;//</name>
+        </root>`,
+    xsl: `<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+        <xsl:output method="html"/>
+        <xsl:template match="/">
+            <html>
+                <body>
+                    <div id="target" style="color:red">INIT</div>
+                    <script>
+                        window.injected = 0;
+                        window.got = "<xsl:value-of select="translate(root/name, '&quot;', '')"/>";
+                        const target = document.getElementById('target');
+                        const expected = '&amp;' + 'quot;;window.injected=1;//';
+                        // Also check that &amp;amp; in the stylesheet stays &amp;amp; and is not decoded to &amp;.
+                        const literalEntity = "&amp;amp;";
+                        const expectedLiteral = '&amp;' + 'amp;';
+                        if (window.injected === 0 &amp;&amp; window.got === expected &amp;&amp; literalEntity === expectedLiteral) {
+                            target.style.color = 'green';
+                            target.textContent = 'PASS';
+                        } else {
+                            target.style.color = 'red';
+                            target.textContent = 'FAIL: injected=' + window.injected + ', got=' + window.got + ', literal=' + literalEntity;
+                        }
+                    </script>
+                </body>
+            </html>
+        </xsl:template>
+    </xsl:stylesheet>`,
+  },
 ];
 
 const fs = require('fs');
