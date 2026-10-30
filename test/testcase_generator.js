@@ -2164,6 +2164,111 @@ const testCases = [
         </html>`;
     },
   },
+  {
+    name: 'Form controls named like DOM members in XSLT output',
+    xml: `<?xml version="1.0" encoding="UTF-8"?>
+        <?xml-stylesheet type="text/xsl" href="{{XSL_HREF}}"?>
+        <document>
+            {{SCRIPT_INJECTION_LOCATION}}
+            INIT
+        </document>`,
+    xsl: `<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+        <xsl:output method="html"/>
+        <xsl:template match="/">
+            <body>
+                <div id="target" style="color:red">INIT</div>
+                <form id="f">
+                    <input name="getAttributeNames"/><input name="getAttribute"/><input name="setAttribute"/>
+                    <input name="removeAttribute"/><input name="querySelectorAll"/><input name="attributes"/>
+                    <input name="namespaceURI"/><input name="localName"/><input name="nodeType"/>
+                    <input name="firstChild"/><input name="childNodes"/><input name="parentNode"/>
+                    <input name="replaceChildren"/><input name="replaceWith"/><input name="remove"/>
+                    <input name="prepend"/><input name="append"/><input name="before"/><input name="after"/>
+                </form>
+                <script>
+                    // The polyfill must not break on these when it renders the output, or when
+                    // the page then uses innerHTML, insertAdjacentHTML and outerHTML on the form.
+                    const f = document.getElementById("f");
+                    const inputs = () => Element.prototype.querySelectorAll.call(f, "input");
+                    const p0 = inputs().length === 19;
+                    f.innerHTML = '&lt;input name="content"&gt;&lt;input name="childNodes"&gt;&lt;input name="localName"&gt;&lt;input name="namespaceURI"&gt;&lt;input name="nodeType"&gt;';
+                    const p1 = inputs().length === 5;
+                    const html = f.innerHTML;
+                    const p2 = typeof html === 'string' &amp;&amp; html.includes('name="childNodes"');
+                    f.insertAdjacentHTML('beforeend', '&lt;input name="append"&gt;');
+                    const p3 = inputs().length === 6;
+                    inputs()[5].outerHTML = '&lt;input name="before"&gt;&lt;input name="after"&gt;';
+                    const p4 = inputs().length === 7;
+                    const target = document.getElementById("target");
+                    if (p0 &amp;&amp; p1 &amp;&amp; p2 &amp;&amp; p3 &amp;&amp; p4) {
+                        target.style.color = "green";
+                        target.textContent = "PASS";
+                    } else {
+                        target.textContent = 'FAIL: ' + [p0, p1, p2, p3, p4].join();
+                    }
+                </script>
+            </body>
+        </xsl:template>
+    </xsl:stylesheet>`,
+  },
+  {
+    name: 'Named elements shadowing document properties in an HTML page',
+    html: `
+        <!DOCTYPE html>
+        <body>
+        <embed name="createDocumentFragment"><embed name="createElementNS"><embed name="createComment">
+        <embed name="implementation"><embed name="documentElement"><embed name="contentType">
+        <embed name="readyState"><embed name="dispatchEvent">
+        {{SCRIPT_INJECTION_LOCATION}}
+        <div id="target">INIT</div>
+        <script>
+        window.onload = () => {
+            ${UTILITIES}
+            // Named elements shadow properties of the document; the polyfill, loaded after
+            // them, must still install and work.
+            const xml = \`<?xml version="1.0" encoding="utf-8"?><page>INIT</page>\`;
+            const xsl = \`<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+                <xsl:output method="html"/>
+                <xsl:template match="/"><div>PASS</div></xsl:template>
+                </xsl:stylesheet>\`;
+            const {xsltProcessor,xmlDoc} = initProcessor(xml,xsl);
+            const fragment = xsltProcessor.transformToFragment(xmlDoc, document);
+            setResult(toFlatString(fragment) === '<div>PASS</div>');
+        };
+        </script>`,
+  },
+  {
+    name: 'Named elements matching option names in an HTML page',
+    html: `
+        <!DOCTYPE html>
+        <body>
+        <iframe name="xsltPolyfillInstalled"></iframe><iframe name="xsltUsePolyfillOnlyIfNeeded"></iframe>
+        <iframe name="xsltDontAutoloadXmlDocs"></iframe><img id="xsltPolyfillOptions">
+        {{SCRIPT_INJECTION_LOCATION}}
+        <div id="target">INIT</div>
+        <script>
+        window.onload = () => {
+            ${UTILITIES}
+            // Named elements appear as window.xsltPolyfillInstalled etc.; the polyfill,
+            // loaded after them, must ignore them as options and still install.
+            const hasPolyfillScript = !!document.querySelector('script[src*="xslt-polyfill"]');
+            if (hasPolyfillScript && typeof window.xsltPolyfillReady !== 'function') {
+                return setResult(false, 'polyfill not installed');
+            }
+            if ('xsltUsePolyfillOnlyIfNeeded' in document.getElementById('xsltPolyfillOptions')) {
+                return setResult(false, 'img used as xsltPolyfillOptions');
+            }
+            const xml = \`<?xml version="1.0" encoding="utf-8"?><page>INIT</page>\`;
+            const xsl = \`<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+                <xsl:output method="html"/>
+                <xsl:template match="/"><div>PASS</div></xsl:template>
+                </xsl:stylesheet>\`;
+            const {xsltProcessor,xmlDoc} = initProcessor(xml,xsl);
+            const fragment = xsltProcessor.transformToFragment(xmlDoc, document);
+            setResult(toFlatString(fragment) === '<div>PASS</div>');
+        };
+        </script>`,
+  },
 ];
 
 const fs = require('fs');
