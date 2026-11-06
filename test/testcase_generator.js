@@ -2581,11 +2581,17 @@ if (!fs.existsSync(outputDir)) {
   fs.mkdirSync(outputDir);
 }
 
+// Appended to the URLs of the polyfill scripts and stylesheets in the generated
+// files, so that the browser doesn't use stale cached copies of them after the
+// test files are regenerated. (Servers often send no caching headers, so the
+// browser caches them heuristically.)
+const cacheBuster = `v=${Date.now()}`;
+
 const scriptInjections = {
   native: '',
-  source: `<script src="../../dist/xslt-wasm.js" xmlns="http://www.w3.org/1999/xhtml" charset="utf-8"></script>
-    <script src="../../src/xslt-polyfill-src.js" xmlns="http://www.w3.org/1999/xhtml" charset="utf-8"></script>`,
-  minified: `<script src="../../xslt-polyfill.min.js" xmlns="http://www.w3.org/1999/xhtml" charset="utf-8"></script>`,
+  source: `<script src="../../dist/xslt-wasm.js?${cacheBuster}" xmlns="http://www.w3.org/1999/xhtml" charset="utf-8"></script>
+    <script src="../../src/xslt-polyfill-src.js?${cacheBuster}" xmlns="http://www.w3.org/1999/xhtml" charset="utf-8"></script>`,
+  minified: `<script src="../../xslt-polyfill.min.js?${cacheBuster}" xmlns="http://www.w3.org/1999/xhtml" charset="utf-8"></script>`,
 };
 
 const generatedTestCases = {};
@@ -2626,7 +2632,7 @@ testCases.forEach((testCase) => {
 
         if (ext === 'xml' && testCase.xsl) {
           const xslFileName = `${baseName}${suffix}.xsl`;
-          content = content.replace('{{XSL_HREF}}', `./${xslFileName}`);
+          content = content.replace('{{XSL_HREF}}', `./${xslFileName}?${cacheBuster}`);
         }
 
         //This is a special case for the basic transform, which has a hard-coded XSLT href

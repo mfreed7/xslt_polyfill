@@ -158,9 +158,10 @@
     }
   }
 
-  function runTest(testCase, mode) {
+  function runTest(testCase, mode, runId) {
     const iframe = document.createElement('iframe');
-    let url = testCase.html || testCase.xhtml || testCase.xml;
+    // Avoid stale cached copies of the (regenerated) test files.
+    let url = (testCase.html || testCase.xhtml || testCase.xml) + '?t=' + runId;
     return { iframe, url };
   }
 
@@ -180,8 +181,9 @@
     updateStats();
     document.getElementById('results').querySelector('tbody').innerHTML = '';
     const mode = modeElement.value;
+    const runId = Date.now();
     for (const testCase of testCases) {
-      const { iframe, url } = runTest(testCase, mode);
+      const { iframe, url } = runTest(testCase, mode, runId);
       addTestResult(testCase.name, iframe, url);
     }
   }
@@ -199,7 +201,7 @@
   async function loadTestsAndRun() {
     let response;
     try {
-      response = await fetch('generated/file_list.json');
+      response = await fetch('generated/file_list.json', { cache: 'no-store' });
       if (!response.ok) throw new Error();
     } catch (e) {
       document.getElementById('warning').style.display = 'block';
@@ -240,7 +242,7 @@
   // Initial check to see if files are present
   (async function() {
     try {
-      const response = await fetch('generated/file_list.json');
+      const response = await fetch('generated/file_list.json', { cache: 'no-store' });
       if (!response.ok) document.getElementById('warning').style.display = 'block';
     } catch (e) {
       document.getElementById('warning').style.display = 'block';
