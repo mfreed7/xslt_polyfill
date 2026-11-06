@@ -1,4 +1,6 @@
+#include <stdarg.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 // Emscripten header for exporting functions
@@ -24,6 +26,55 @@
 
 // Forward declaration for our JS fetch function.
 const char *fetch_and_load_document(const char *url);
+
+// Logs a message to the console at the given xmlErrorLevel, prefixed with
+// "file:line: " if a file is given.
+EM_JS(void, log_to_console, (int level, const char *message, const char *file, int line), {
+  var text = UTF8ToString(message).trimEnd();
+  if (file) {
+    text = UTF8ToString(file) + ':' + line + ': ' + text;
+  }
+  if (level === 0 /* XML_ERR_NONE */) {
+    console.debug(text);
+  } else if (level === 1 /* XML_ERR_WARNING */) {
+    console.warn(text);
+  } else {
+    console.error(text);
+  }
+});
+
+// Like Chrome, log libxml2's structured errors (e.g. parse errors) to the
+// console at their own level.
+static void log_structured_error(void *ctx, const xmlError *error) {
+  if (error && error->message) {
+    log_to_console(error->level, error->message, error->file, error->line);
+  }
+}
+
+// libxslt reports warnings (e.g. for version="2.0" stylesheets), errors, and
+// xsl:message output through the generic error handlers. Native XSLT doesn't
+// log these, so buffer them, and only log them if the transformation fails.
+static char *generic_errors = NULL;
+static size_t generic_errors_len = 0;
+
+static void buffer_generic_error(void *ctx, const char *msg, ...) {
+  va_list args;
+  va_start(args, msg);
+  int len = vsnprintf(NULL, 0, msg, args);
+  va_end(args);
+  if (len <= 0) {
+    return;
+  }
+  char *grown = realloc(generic_errors, generic_errors_len + len + 1);
+  if (!grown) {
+    return;
+  }
+  generic_errors = grown;
+  va_start(args, msg);
+  vsnprintf(generic_errors + generic_errors_len, len + 1, msg, args);
+  va_end(args);
+  generic_errors_len += len;
+}
 
 // Use EM_JS to define a JavaScript function that can be called from C.
 // This function will use the fetch API to get a document from a URL.
@@ -671,6 +722,12 @@ char *transform(const char *xml_content, int xml_len, const char *xslt_content,
   // Set our custom document loader.
   xsltSetLoaderFunc(docLoader);
 
+  // Set our error handlers.
+  generic_errors_len = 0;
+  xmlSetStructuredErrorFunc(NULL, log_structured_error);
+  xmlSetGenericErrorFunc(NULL, buffer_generic_error);
+  xsltSetGenericErrorFunc(NULL, buffer_generic_error);
+
   // Parse the input strings into libxml2 documents using their known length.
   xml_doc = xmlReadMemory(xml_content, xml_len, "xml", "UTF-8", XML_PARSE_HUGE);
   if (xml_doc == NULL) {
@@ -800,6 +857,18 @@ cleanup:
 
   // Unset the loader function.
   xsltSetLoaderFunc(NULL);
+
+  // Log the buffered messages if the transformation failed, and unset the
+  // error handlers.
+  if (!result_string && generic_errors_len > 0) {
+    log_to_console(XML_ERR_ERROR, generic_errors, NULL, 0);
+  }
+  free(generic_errors);
+  generic_errors = NULL;
+  generic_errors_len = 0;
+  xmlSetStructuredErrorFunc(NULL, NULL);
+  xmlSetGenericErrorFunc(NULL, NULL);
+  xsltSetGenericErrorFunc(NULL, NULL);
 
   // Return the allocated string (or NULL on failure).
   return result_string;

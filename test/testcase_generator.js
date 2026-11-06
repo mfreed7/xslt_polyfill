@@ -2066,6 +2066,58 @@ const testCases = [
         </xsl:stylesheet>`,
   },
   {
+    name: 'libxslt warnings and xsl:message are not logged on success',
+    xml: `<?xml version="1.0"?>
+        <?xml-stylesheet type="text/xsl" href="{{XSL_HREF}}"?>
+        <page>
+            <script xmlns="http://www.w3.org/1999/xhtml">
+                window.loggedMessages = [];
+                for (const level of ['error', 'warn']) {
+                    const original = console[level];
+                    console[level] = function (...args) {
+                        window.loggedMessages.push(level + ': ' + args.join(' '));
+                        return original.apply(this, args);
+                    };
+                }
+            </script>
+            {{SCRIPT_INJECTION_LOCATION}}
+            <message>INIT</message>
+        </page>`,
+    xsl: `<xsl:stylesheet version="2.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+        <xsl:output method="html"/>
+        <xsl:template match="/">
+            <xsl:message>message from xsl:message</xsl:message>
+            <html><body>
+                <div id="target" style="color:red">INIT</div>
+                <script>
+                    const target = document.getElementById('target');
+                    const logged = (window.loggedMessages || []).slice();
+                    let failureLogged = true;
+                    if (window.xsltPolyfillVersion) {
+                        // A failing transformation should still log its messages.
+                        const parser = new DOMParser();
+                        const xsl = parser.parseFromString('&lt;xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform"&gt;' +
+                            '&lt;xsl:template match="/"&gt;&lt;xsl:message terminate="yes"&gt;terminating message&lt;/xsl:message&gt;&lt;/xsl:template&gt;' +
+                            '&lt;/xsl:stylesheet&gt;', 'application/xml');
+                        const processor = new XSLTProcessor();
+                        processor.importStylesheet(xsl);
+                        try {
+                            processor.transformToFragment(parser.parseFromString('&lt;root/&gt;', 'application/xml'), document);
+                        } catch (e) {}
+                        failureLogged = window.loggedMessages.some((m) => m.includes('terminating message'));
+                    }
+                    if (logged.length === 0 &amp;&amp; failureLogged) {
+                        target.style.color = 'green';
+                        target.textContent = 'PASS';
+                    } else {
+                        target.textContent = 'FAIL: failureLogged=' + failureLogged + ', logged on success: ' + logged.join(' | ');
+                    }
+                </script>
+            </body></html>
+        </xsl:template>
+        </xsl:stylesheet>`,
+  },
+  {
     name: 'Reject cross-origin and data URLs',
     get extraFiles() {
       const evilXsl = `<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
