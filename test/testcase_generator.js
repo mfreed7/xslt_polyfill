@@ -1958,6 +1958,60 @@ const testCases = [
     },
   },
   {
+    name: 'xml-stylesheet with type text/xml',
+    xml: `<?xml version="1.0"?>
+        <?xml-stylesheet type="text/xml" href="{{XSL_HREF}}"?>
+        <page>
+            {{SCRIPT_INJECTION_LOCATION}}
+            <message>INIT</message>
+        </page>`,
+    xsl: `<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+        <xsl:output method="html"/>
+        <xsl:template match="/">
+            <div id="target" style="color:green">PASS</div>
+        </xsl:template>
+        </xsl:stylesheet>`,
+  },
+  {
+    name: 'xml-stylesheet with type application/xml',
+    xml: `<?xml version="1.0"?>
+        <?xml-stylesheet type="application/xml" href="{{XSL_HREF}}"?>
+        <page>
+            {{SCRIPT_INJECTION_LOCATION}}
+            <message>INIT</message>
+        </page>`,
+    xsl: `<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+        <xsl:output method="html"/>
+        <xsl:template match="/">
+            <div id="target" style="color:green">PASS</div>
+        </xsl:template>
+        </xsl:stylesheet>`,
+  },
+  {
+    name: 'xml-stylesheet with alternate=yes is skipped',
+    extraFiles: {
+      'xml_stylesheet_with_alternate_yes_is_skipped_alt.xsl': `<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+        <xsl:output method="html"/>
+        <xsl:template match="/">
+            <div id="target" style="color:red">FAIL: alternate stylesheet applied</div>
+        </xsl:template>
+      </xsl:stylesheet>`,
+    },
+    xml: `<?xml version="1.0"?>
+        <?xml-stylesheet type="text/xsl" href="./xml_stylesheet_with_alternate_yes_is_skipped_alt.xsl" alternate="yes"?>
+        <?xml-stylesheet type="text/xsl" href="{{XSL_HREF}}"?>
+        <page>
+            {{SCRIPT_INJECTION_LOCATION}}
+            <message>INIT</message>
+        </page>`,
+    xsl: `<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+        <xsl:output method="html"/>
+        <xsl:template match="/">
+            <div id="target" style="color:green">PASS</div>
+        </xsl:template>
+        </xsl:stylesheet>`,
+  },
+  {
     name: 'Reject cross-origin and data URLs',
     get extraFiles() {
       const evilXsl = `<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">

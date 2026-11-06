@@ -770,6 +770,9 @@
       return new URL(url, window.location.href).href;
     }
 
+    // The `xml-stylesheet` types that both Chrome and Firefox apply as XSLT.
+    const xsltPITypes = ['text/xsl', 'application/xslt+xml', 'text/xml', 'application/xml'];
+
     function findXsltPathInProlog(xmlDoc) {
       if (!xmlDoc) return null;
       for (const node of getOn(xmlDoc, 'childNodes')) {
@@ -780,7 +783,9 @@
           const piData = node.data;
           const hrefMatch = piData.match(/href\s*=\s*(["'])(.*?)\1/)?.[2];
           const typeMatch = piData.match(/type\s*=\s*(["'])(.*?)\1/)?.[2]?.toLowerCase();
-          if (hrefMatch && (typeMatch === 'text/xsl' || typeMatch === 'application/xslt+xml')) {
+          // Like Firefox, skip alternate stylesheets.
+          const alternateMatch = piData.match(/alternate\s*=\s*(["'])(.*?)\1/)?.[2];
+          if (hrefMatch && xsltPITypes.includes(typeMatch) && alternateMatch !== 'yes') {
             // Decode HTML entities from the path.
             return hrefMatch
               .replace(/&lt;/g, '<')
