@@ -1322,7 +1322,7 @@ const testCases = [
                     <div style="white-space: pre"><table><tr><td id="pre">a  b</td></tr></table></div>
                     <li id="li">stray<ul><li id="nestedli">nested</li></ul></li>
                 </div>
-                <div id="target" style="color:red">INIT</div>
+                <div id="target" style="color:red; font: initial">INIT</div>
                 <script>
                     const cs = (el) => window.getComputedStyle(el);
                     const td = cs(document.getElementById('td'));
@@ -1379,7 +1379,7 @@ const testCases = [
                     <table><tr><td><li id="li">stray<ul><li id="nestedli">nested</li></ul></li></td></tr></table>
                     <ul><li id="listli">in a list</li></ul>
                 </div>
-                <div id="target" style="color:red">INIT</div>
+                <div id="target" style="color:red; font: initial">INIT</div>
                 <script>
                     // The output has no doctype, so natively it's in quirks mode, where
                     // tables don't inherit font size, weight, white-space or
@@ -2474,7 +2474,7 @@ const testCases = [
         <xsl:template match="/">
             <body>
                 <div id="target" style="color:red">INIT</div>
-                <form id="f">
+                <form id="f" style="display: none">
                     <input name="getAttributeNames"/><input name="getAttribute"/><input name="setAttribute"/>
                     <input name="removeAttribute"/><input name="querySelectorAll"/><input name="attributes"/>
                     <input name="namespaceURI"/><input name="localName"/><input name="nodeType"/>
@@ -2539,8 +2539,10 @@ const testCases = [
     html: `
         <!DOCTYPE html>
         <body>
+        <div style="display: none">
         <iframe name="xsltPolyfillInstalled"></iframe><iframe name="xsltUsePolyfillOnlyIfNeeded"></iframe>
         <iframe name="xsltDontAutoloadXmlDocs"></iframe><img id="xsltPolyfillOptions">
+        </div>
         {{SCRIPT_INJECTION_LOCATION}}
         <div id="target">INIT</div>
         <script>
