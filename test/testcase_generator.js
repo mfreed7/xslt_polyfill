@@ -1346,6 +1346,9 @@ const testCases = [
                     };
                     const failures = Object.keys(expected).filter((k) => results[k] !== expected[k]);
                     document.getElementById('content').remove();
+                    // Restore the default body margin, so the result lines up with other tests.
+                    document.body.removeAttribute('leftmargin');
+                    document.body.removeAttribute('topmargin');
                     const target = document.getElementById('target');
                     if (failures.length === 0) {
                         target.style.color = 'green';
