@@ -223,6 +223,12 @@ Note that as of now, there are a few things that don't work perfectly:
    DOM, not just the DOM "above" the script. Also, a synthetic `load` event
    will be fired after all scripts are inserted, since no trusted load will be
    fired either.
+ - The transformation happens asynchronously, after the document has loaded.
+   So when an XML document is transformed in an `<iframe>`, the frame's `load`
+   event fires before the transformation is done, and a parent's
+   `iframe.onload` handler sees the untransformed XML document (e.g. its
+   `contentDocument.body` is `null`). Natively, the transformed document is
+   already in place when `load` fires.
  - Because the transformed HTML content can contain `<script>`'s, and those
    scripts likely expect the document to be an HTML document, and not the XML
    document mentioned above, some things need to be monkeypatched by this
