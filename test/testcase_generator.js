@@ -2226,6 +2226,175 @@ const testCases = [
         </xsl:stylesheet>`,
   },
   {
+    name: 'Non-UTF-8 stylesheet imported with xsl:import',
+    extraFiles: {
+      // ISO-8859-1, so "\u00fc" and "\u00df" are the single bytes 0xFC and 0xDF.
+      'Non_UTF_8_stylesheet_imported_with_xsl_import_latin1.xsl': Buffer.from(
+        `<?xml version="1.0" encoding="ISO-8859-1"?>
+        <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+          <xsl:template name="imported-text">Gr\u00fc\u00dfe</xsl:template>
+        </xsl:stylesheet>`,
+        'latin1',
+      ),
+    },
+    xml: `<?xml version="1.0"?>
+        <?xml-stylesheet type="text/xsl" href="{{XSL_HREF}}"?>
+        <page>
+            {{SCRIPT_INJECTION_LOCATION}}
+            <message>INIT</message>
+        </page>`,
+    xsl: `<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+        <xsl:import href="./Non_UTF_8_stylesheet_imported_with_xsl_import_latin1.xsl"/>
+        <xsl:output method="html"/>
+        <xsl:template match="/">
+            <html><body>
+                <div id="target" style="color:red">INIT</div>
+                <div id="text" style="display:none"><xsl:call-template name="imported-text"/></div>
+                <script>
+                    const text = document.getElementById('text').textContent;
+                    const target = document.getElementById('target');
+                    if (text === 'Gr\\u00fc\\u00dfe') {
+                        target.style.color = 'green';
+                        target.textContent = 'PASS';
+                    } else {
+                        target.textContent = 'FAIL: ' + escape(text);
+                    }
+                </script>
+            </body></html>
+        </xsl:template>
+        </xsl:stylesheet>`,
+  },
+  {
+    name: 'Non-UTF-8 stylesheet included with xsl:include',
+    extraFiles: {
+      // UTF-16LE, with a BOM.
+      'Non_UTF_8_stylesheet_included_with_xsl_include_utf16.xsl': Buffer.from(
+        `\ufeff<?xml version="1.0" encoding="UTF-16"?>
+        <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+          <xsl:template name="included-text">Gr\u00fc\u00dfe</xsl:template>
+        </xsl:stylesheet>`,
+        'utf16le',
+      ),
+    },
+    xml: `<?xml version="1.0"?>
+        <?xml-stylesheet type="text/xsl" href="{{XSL_HREF}}"?>
+        <page>
+            {{SCRIPT_INJECTION_LOCATION}}
+            <message>INIT</message>
+        </page>`,
+    xsl: `<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+        <xsl:include href="./Non_UTF_8_stylesheet_included_with_xsl_include_utf16.xsl"/>
+        <xsl:output method="html"/>
+        <xsl:template match="/">
+            <html><body>
+                <div id="target" style="color:red">INIT</div>
+                <div id="text" style="display:none"><xsl:call-template name="included-text"/></div>
+                <script>
+                    const text = document.getElementById('text').textContent;
+                    const target = document.getElementById('target');
+                    if (text === 'Gr\\u00fc\\u00dfe') {
+                        target.style.color = 'green';
+                        target.textContent = 'PASS';
+                    } else {
+                        target.textContent = 'FAIL: ' + escape(text);
+                    }
+                </script>
+            </body></html>
+        </xsl:template>
+        </xsl:stylesheet>`,
+  },
+  {
+    name: 'Non-UTF-8 document loaded with document()',
+    extraFiles: {
+      // windows-1251, so the Cyrillic text is the bytes 0xCF 0xF0 0xE8 0xE2 0xE5 0xF2.
+      'Non_UTF_8_document_loaded_with_document___cp1251.xml': Buffer.concat([
+        Buffer.from('<?xml version="1.0" encoding="windows-1251"?>\n<root>'),
+        Buffer.from([0xcf, 0xf0, 0xe8, 0xe2, 0xe5, 0xf2]),
+        Buffer.from('</root>'),
+      ]),
+    },
+    xml: `<?xml version="1.0"?>
+        <?xml-stylesheet type="text/xsl" href="{{XSL_HREF}}"?>
+        <page>
+            {{SCRIPT_INJECTION_LOCATION}}
+            <message>INIT</message>
+        </page>`,
+    xsl: `<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+        <xsl:output method="html"/>
+        <xsl:variable name="doc" select="document('./Non_UTF_8_document_loaded_with_document___cp1251.xml')"/>
+        <xsl:template match="/">
+            <html><body>
+                <div id="target" style="color:red">INIT</div>
+                <div id="text" style="display:none"><xsl:value-of select="$doc/root"/></div>
+                <script>
+                    const text = document.getElementById('text').textContent;
+                    const target = document.getElementById('target');
+                    if (text === '\\u041f\\u0440\\u0438\\u0432\\u0435\\u0442') {
+                        target.style.color = 'green';
+                        target.textContent = 'PASS';
+                    } else {
+                        target.textContent = 'FAIL: ' + escape(text);
+                    }
+                </script>
+            </body></html>
+        </xsl:template>
+        </xsl:stylesheet>`,
+  },
+  {
+    name: 'Non-UTF-8 document loaded with loadXmlWithXsltFromUrl',
+    extraFiles: {
+      // windows-1251, so the Cyrillic text is the bytes 0xCF 0xF0 0xE8 0xE2 0xE5 0xF2.
+      'Non_UTF_8_document_loaded_with_loadXmlWithXsltFromUrl_cp1251.xml': Buffer.concat([
+        Buffer.from(
+          '<?xml version="1.0" encoding="windows-1251"?>\n' +
+            '<?xml-stylesheet type="text/xsl" href="./Non_UTF_8_document_loaded_with_loadXmlWithXsltFromUrl.xsl"?>\n<root>',
+        ),
+        Buffer.from([0xcf, 0xf0, 0xe8, 0xe2, 0xe5, 0xf2]),
+        Buffer.from('</root>'),
+      ]),
+      'Non_UTF_8_document_loaded_with_loadXmlWithXsltFromUrl.xsl': `<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+        <xsl:output method="html"/>
+        <xsl:template match="/">
+            <html><body>
+                <div id="target" style="color:red">INIT</div>
+                <div id="text" style="display:none"><xsl:value-of select="/root"/></div>
+                <script>
+                    const text = document.getElementById('text').textContent;
+                    const target = document.getElementById('target');
+                    if (text === '\\u041f\\u0440\\u0438\\u0432\\u0435\\u0442') {
+                        target.style.color = 'green';
+                        target.textContent = 'PASS';
+                    } else {
+                        target.textContent = 'FAIL: ' + escape(text);
+                    }
+                </script>
+            </body></html>
+        </xsl:template>
+      </xsl:stylesheet>`,
+    },
+    html: `
+        <!DOCTYPE html>
+        <body>
+        {{SCRIPT_INJECTION_LOCATION}}
+        <div id="target" style="color:red">INIT</div>
+        <script>
+        // Use { once: true }: the polyfill fires a synthetic load event after
+        // replacing the document, which mustn't start another transformation.
+        window.addEventListener('load', () => {
+            ${UTILITIES}
+            if (!window.loadXmlWithXsltFromUrl) {
+                // This is a polyfill API; there's nothing to test natively.
+                return setResult(true);
+            }
+            window.loadXmlWithXsltFromUrl('./Non_UTF_8_document_loaded_with_loadXmlWithXsltFromUrl_cp1251.xml')
+                .catch((e) => {
+                    // On failure, the polyfill replaces the document's content with the error.
+                    document.documentElement.textContent = 'FAIL: ' + e;
+                });
+        }, { once: true });
+        </script>`,
+  },
+  {
     name: 'Reject cross-origin and data URLs',
     get extraFiles() {
       const evilXsl = `<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
@@ -2613,7 +2782,8 @@ testCases.forEach((testCase) => {
   if (testCase.extraFiles) {
     Object.entries(testCase.extraFiles).forEach(([extraName, extraContent]) => {
       const extraPath = path.join(outputDir, extraName);
-      fs.writeFileSync(extraPath, extraContent.trim());
+      // A Buffer is written as-is, e.g. for files in encodings other than UTF-8.
+      fs.writeFileSync(extraPath, Buffer.isBuffer(extraContent) ? extraContent : extraContent.trim());
       console.log(`Generated ${extraPath}`);
     });
   }

@@ -110,6 +110,14 @@ EM_JS(const char *, fetch_and_load_document, (const char *url), {
               return null;
             }
           }
+          // Decode the document in its own encoding (see decodeXmlBytes in
+          // xslt-polyfill-src.js). Response.text() always decodes as UTF-8.
+          if (Module['decodeXmlBytes']) {
+            return response.arrayBuffer().then(function(buffer) {
+              return Module['decodeXmlBytes'](new Uint8Array(buffer),
+                                              response.headers.get('Content-Type'));
+            });
+          }
           return response.text();
         })
         .then(function(text) {

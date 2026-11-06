@@ -262,7 +262,8 @@
       }
       wasmLoadStarted = true;
       // Emscripten builds the module on the object passed to the factory.
-      const moduleArg = {};
+      // fetch_and_load_document (in transform.c) uses decodeXmlBytes from it.
+      const moduleArg = { decodeXmlBytes };
       createXSLTTransformModule(moduleArg)
         .then(initializeWasmModule)
         .catch((err) => {
@@ -289,6 +290,37 @@
       }
     }
 
+    // Decodes the bytes of a fetched XML document (a source document, or a
+    // stylesheet or document loaded by `<xsl:import>`, `<xsl:include>`, or
+    // `document()`) to a string, like the browser would: with the encoding from
+    // the BOM, else the Content-Type charset, else the XML declaration, else
+    // UTF-8. libxml2 is only ever given UTF-8, so this is what makes other
+    // encodings work. Like native XSLT, this fails (throws) on invalid bytes.
+    function decodeXmlBytes(bytes, contentType) {
+      let bomEncoding = null;
+      if (bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf) {
+        bomEncoding = 'utf-8';
+      } else if (bytes[0] === 0xfe && bytes[1] === 0xff) {
+        bomEncoding = 'utf-16be';
+      } else if (bytes[0] === 0xff && bytes[1] === 0xfe) {
+        bomEncoding = 'utf-16le';
+      }
+      const charset = contentType?.match(/;\s*charset\s*=\s*"?([^";\s]+)/i)?.[1];
+      // The XML declaration is ASCII, so any ASCII-compatible decoding finds it.
+      const prolog = new TextDecoder('windows-1252').decode(bytes.subarray(0, 1024));
+      const declaredEncoding = prolog.match(/^<\?xml\s[^>]*?encoding\s*=\s*(["'])([^"']+)\1/)?.[2];
+      for (const label of [bomEncoding, charset, declaredEncoding, 'utf-8']) {
+        if (!label) continue;
+        let decoder;
+        try {
+          decoder = new TextDecoder(label, { fatal: true });
+        } catch {
+          continue; // Not an encoding the browser supports.
+        }
+        return decoder.decode(bytes);
+      }
+    }
+
     async function loadDoc(fn, cache) {
       if (!isSameOriginAllowedUrl(fn)) {
         return null;
@@ -302,7 +334,13 @@
       if (!res.ok || (res.url && !isSameOriginAllowedUrl(res.url))) {
         return null;
       }
-      const xmltext = await res.text();
+      const bytes = new Uint8Array(await res.arrayBuffer());
+      let xmltext;
+      try {
+        xmltext = decodeXmlBytes(bytes, res.headers.get('Content-Type'));
+      } catch {
+        return null;
+      }
       const doc = new DOMParser().parseFromString(xmltext, 'text/xml');
       if (doc.querySelector('parsererror') || doc.documentElement?.localName === 'parsererror') {
         return null;
@@ -1287,7 +1325,15 @@
         return showError(`Failed to fetch XML file: ${xmlResponse.statusText}`);
       }
       const xmlBytes = new Uint8Array(await xmlResponse.arrayBuffer());
-      return loadXmlWithXsltFromBytes(xmlBytes, url);
+      // Decode it in its own encoding, and pass it on as UTF-8, which is what
+      // loadXmlWithXsltFromBytes() expects.
+      let xmlText;
+      try {
+        xmlText = decodeXmlBytes(xmlBytes, xmlResponse.headers.get('Content-Type'));
+      } catch (e) {
+        return showError(`Failed to decode XML file: ${e.message}`);
+      }
+      return loadXmlWithXsltFromBytes(new TextEncoder().encode(xmlText), url);
     }
 
     function loadXmlUrlWithXsltWhenReady(url) {
