@@ -351,6 +351,49 @@ const testCases = [
         </script>`,
   },
   {
+    name: 'Wasm module loads on first use',
+    html: `
+        <!DOCTYPE html>
+        <body>
+        <script>
+            // Count Wasm instantiations, to check that the polyfill doesn't
+            // load its Wasm module until it's needed.
+            window.wasmInstantiations = 0;
+            WebAssembly.Instance = new Proxy(WebAssembly.Instance, {
+                construct(target, args) {
+                    window.wasmInstantiations++;
+                    return Reflect.construct(target, args);
+                },
+            });
+            for (const name of ['instantiate', 'instantiateStreaming']) {
+                const original = WebAssembly[name];
+                WebAssembly[name] = function (...args) {
+                    window.wasmInstantiations++;
+                    return original.apply(this, args);
+                };
+            }
+        </script>
+        {{SCRIPT_INJECTION_LOCATION}}
+        <div id="target" style="color:red">INIT</div>
+        <script>
+        window.onload = () => setTimeout(() => {
+            const before = window.wasmInstantiations;
+            const xml = \`<page>PASS</page>\`;
+            const xsl = \`<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+                <xsl:template match="/"><div><xsl:value-of select="page"/></div></xsl:template>
+                </xsl:stylesheet>\`;
+            ${UTILITIES}
+            // No xsltPolyfillReady(): the synchronous methods should load the module.
+            const {xsltProcessor,xmlDoc} = initProcessor(xml,xsl);
+            const fragment = toFlatString(xsltProcessor.transformToFragment(xmlDoc, document));
+            const after = window.wasmInstantiations;
+            const loadedOnFirstUse = !window.xsltPolyfillVersion || (before === 0 && after === 1);
+            setResult(fragment === '<div>PASS</div>' && loadedOnFirstUse,
+                'fragment=' + fragment + ', instantiations before=' + before + ', after=' + after);
+        }, 100);
+        </script>`,
+  },
+  {
     name: 'XSLTProcessor output (XML)',
     html: `
         <!DOCTYPE html>

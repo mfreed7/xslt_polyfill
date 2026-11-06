@@ -229,27 +229,50 @@
     // The polyfill
     const promiseName = 'xsltPolyfillReady';
 
-    // Initialize the Wasm module as early as possible.
+    // The Wasm module is loaded on first use (see loadWasmModule()), so that
+    // pages that don't use XSLT don't pay for it.
     let WasmModule = null;
     let wasm_transform = null;
     let wasm_transform_async = null;
     let wasm_free = null;
+    let wasmLoadStarted = false;
 
-    createXSLTTransformModule()
-      .then((Module) => {
-        WasmModule = Module;
-        const args = ['transform', 'number', ['number', 'number', 'number', 'number', 'number', 'number', 'number']];
-        wasm_transform = Module.cwrap(...args, { async: false });
-        wasm_transform_async = Module.cwrap(...args, { async: true });
-        wasm_free = Module._free;
+    function initializeWasmModule(Module) {
+      if (WasmModule) {
+        return;
+      }
+      WasmModule = Module;
+      const args = ['transform', 'number', ['number', 'number', 'number', 'number', 'number', 'number', 'number']];
+      wasm_transform = Module.cwrap(...args, { async: false });
+      wasm_transform_async = Module.cwrap(...args, { async: true });
+      wasm_free = Module._free;
 
-        // Tell people we're ready.
-        polyfillReadyPromiseResolve();
-      })
-      .catch((err) => {
-        console.error('Error loading XSLT Wasm module:', err);
-        polyfillReadyPromiseReject(err);
-      });
+      // Tell people we're ready.
+      polyfillReadyPromiseResolve();
+    }
+
+    // Starts loading the Wasm module, if that hasn't started yet. In the
+    // default build, the Wasm is embedded and compiled synchronously, so the
+    // module is ready when this returns, and the synchronous XSLTProcessor
+    // methods can load it on first use. Otherwise (e.g. the nowasm build), it's
+    // ready when the xsltPolyfillReady() promise resolves.
+    function loadWasmModule() {
+      if (wasmLoadStarted) {
+        return;
+      }
+      wasmLoadStarted = true;
+      // Emscripten builds the module on the object passed to the factory.
+      const moduleArg = {};
+      createXSLTTransformModule(moduleArg)
+        .then(initializeWasmModule)
+        .catch((err) => {
+          console.error('Error loading XSLT Wasm module:', err);
+          polyfillReadyPromiseReject(err);
+        });
+      if (moduleArg.calledRun) {
+        initializeWasmModule(moduleArg);
+      }
+    }
 
     function isSameOriginAllowedUrl(url) {
       try {
@@ -406,6 +429,7 @@
     const textDecoder = new TextDecoder();
 
     function transformXmlWithXslt(xmlContent, xsltContent, parameters, xsltUrl, allowAsync, buildPlainText) {
+      loadWasmModule();
       if (!wasm_transform || !WasmModule) {
         throw new Error(
           `Polyfill XSLT Wasm module not yet loaded. Please wait for the ${promiseName} promise to resolve.`,
@@ -760,6 +784,7 @@
     }
 
     function xsltPolyfillReady() {
+      loadWasmModule();
       return polyfillReadyPromise;
     }
 
@@ -837,6 +862,7 @@
 
       // Process XML/XSLT and replace the document.
       try {
+        await xsltPolyfillReady();
         const { content, mimeType } = await transformXmlWithXslt(
           xmlBytes,
           compiledXsltText,
