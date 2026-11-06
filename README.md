@@ -192,10 +192,12 @@ standards-compliant XSLT 1.0 engine.
 - **Script Execution**: To ensure functionality in the transformed output, the
   polyfill manually re-creates and executes `<script>` elements and fires
   synthetic `DOMContentLoaded` and `load` events.
-- **MIME Types & Namespaces**: Stylesheets must use `type="text/xsl"` or
-  `type="application/xslt+xml"`. Because the underlying document remains an
-  XML/XHTML document, the polyfill monkey-patches `document.createElement` to
-  ensure new elements are created in the XHTML namespace.
+- **MIME Types & Namespaces**: Stylesheets must use `type="text/xsl"`,
+  `type="application/xslt+xml"`, `type="text/xml"`, or `type="application/xml"`,
+  and `alternate="yes"` stylesheets are skipped. Because the underlying
+  document remains an XML/XHTML document, the polyfill monkey-patches
+  `document.createElement` to ensure new elements are created in the XHTML
+  namespace.
 
 ## Limitations
 
@@ -210,6 +212,11 @@ Note that as of now, there are a few things that don't work perfectly:
    Because XHTML always renders in no-quirks mode, if the transformed (HTML)
    output content *doesn't* include a `<!DOCTYPE>`, then it ordinarily would
    have rendered in quirks mode, which is different.
+ - For the same reason, the transformed content stays in an XML document, so
+   CSS selectors match element and attribute names case-sensitively
+   (`BODY { ... }` doesn't match `<body>`, as it would in an HTML document),
+   DOM methods like `getElementsByTagName('P')` and `getAttribute('CLASS')`
+   are case-sensitive too, and `document.write()` throws.
  - Scripts in the transformed output must be "copied" to fresh `<script>`
    elements so that they execute. This means the behavior will be slightly
    different from native: all (legacy synchronous) scripts will see the full
@@ -233,6 +240,11 @@ Note that as of now, there are a few things that don't work perfectly:
  - The Wasm code is embedded into a single file, for ease-of-use and file size,
    via the emcc SINGLE_FILE option. This means that the encoding must be UTF-8
    or that resource will be incorrectly decoded.
+ - The Wasm module is compiled in the page, so a Content Security Policy whose
+   `script-src` doesn't allow `'wasm-unsafe-eval'` blocks it: the
+   `xsltPolyfillReady()` promise rejects and the `XSLTProcessor` methods
+   throw, even though native XSLT would work. The module is only loaded when
+   XSLT is first used, so pages that don't use XSLT aren't affected.
  - There are likely opportunities for performance improvement. In particular,
    there are a few places where the content takes extra passes through a
    parser, and those could likely be streamlined.
