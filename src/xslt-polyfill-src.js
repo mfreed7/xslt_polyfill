@@ -908,6 +908,7 @@
     }
 
     function unsafeReplaceDocumentWithHtml(targetElement, htmlString, mimeType) {
+      const isHtmlOutput = (mimeType || 'text/html') === 'text/html';
       if (mimeType === 'text/plain') {
         const escaped = htmlString.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         htmlString = `<pre>${escaped}</pre>`;
@@ -960,6 +961,42 @@
             });
           }
         }
+      }
+      // Natively, HTML output without a doctype (or with a quirky one) is
+      // rendered in quirks mode. The polyfill's document can't switch modes,
+      // so emulate quirks.css's table and list rules (except
+      // `color: -internal-quirk-inherit` on tables). DOMParser applies the same
+      // doctype rules, so its compatMode says whether the output is quirky.
+      // This is prepended before the reset stylesheet below, so it comes after
+      // it in the document, and wins where they overlap.
+      if (
+        targetElement instanceof HTMLHtmlElement &&
+        isHtmlOutput &&
+        getOn(parsedDoc, 'compatMode') === 'BackCompat' &&
+        getOn(document, 'compatMode') !== 'BackCompat'
+      ) {
+        const quirksStyles = callOn(document, 'createElementNS', 'http://www.w3.org/1999/xhtml', 'style');
+        quirksStyles.textContent = `
+          :where(table) {
+            white-space: normal;
+            line-height: normal;
+            font-weight: normal;
+            font-size: medium;
+            font-variant: normal;
+            font-style: normal;
+            text-align: start;
+          }
+          :where(li) {
+            list-style-position: inside;
+          }
+          :where(li) :where(dir, menu, ol, ul) {
+            list-style-position: outside;
+          }
+          :where(dir, menu, ol, ul) :where(dir, menu, ol, ul, li) {
+            list-style-position: unset;
+          }`;
+        const head = callOn(targetElement, 'querySelector', 'head');
+        callOn(head || targetElement, 'prepend', quirksStyles);
       }
       if (targetElement instanceof HTMLHtmlElement && usesViewSourceStyles(targetElement)) {
         // Chrome's XML viewer (which runs when the XML source has no XHTML, SVG,

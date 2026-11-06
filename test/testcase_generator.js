@@ -1280,11 +1280,15 @@ const testCases = [
                     const style = window.getComputedStyle(tbl);
                     const style2 = window.getComputedStyle(tbl2);
                     const tdStyle = window.getComputedStyle(document.getElementById("td2"));
+                    // The output has no doctype, so (natively) it's in quirks mode, where
+                    // a stray li's marker is inside.
+                    const liStyle = window.getComputedStyle(tbl2.querySelector("li"));
                     const widthPass = tbl.getAttribute("width") === "60%" &amp;&amp; tbl.offsetWidth > 35;
                     const spacingPass = style.borderSpacing === "10px" || style.borderSpacing === "10px 10px";
                     const alignPass = tbl.getBoundingClientRect().left > 15;
                     const defaultPass = (style2.borderSpacing === "2px" || style2.borderSpacing === "2px 2px") &amp;&amp;
-                                        tdStyle.paddingTop !== "0px";
+                                        tdStyle.paddingTop !== "0px" &amp;&amp;
+                                        liStyle.listStylePosition === "inside";
                     if (widthPass &amp;&amp; spacingPass &amp;&amp; alignPass &amp;&amp; defaultPass) {
                         target.style.color = "green";
                         target.textContent = "PASS";
@@ -1339,6 +1343,64 @@ const testCases = [
                         preInTable: 'pre',
                         strayLi: 'outside',
                         nestedLi: 'outside',
+                    };
+                    const failures = Object.keys(expected).filter((k) => results[k] !== expected[k]);
+                    document.getElementById('content').remove();
+                    const target = document.getElementById('target');
+                    if (failures.length === 0) {
+                        target.style.color = 'green';
+                        target.textContent = 'PASS';
+                    } else {
+                        target.textContent = 'FAIL: ' + failures.map((k) => k + '=' + results[k]).join(', ');
+                    }
+                </script>
+            </body>
+            </html>
+        </xsl:template>
+    </xsl:stylesheet>`,
+  },
+  {
+    name: 'Quirks mode table and list styles for output without a doctype',
+    xml: `<?xml version="1.0" encoding="UTF-8"?>
+        <?xml-stylesheet type="text/xsl" href="{{XSL_HREF}}"?>
+        <document>
+            {{SCRIPT_INJECTION_LOCATION}}
+            INIT
+        </document>`,
+    xsl: `<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+        <xsl:output method="html"/>
+        <xsl:template match="/">
+            <html>
+            <head><style>body { font-family: cursive; font-size: 10px; font-weight: bold; }</style></head>
+            <body>
+                <div id="content">
+                    <div style="text-align: center"><table><tr><td id="td">cell</td></tr></table></div>
+                    <div style="white-space: pre"><table><tr><td id="pre">a  b</td></tr></table></div>
+                    <table><tr><td><li id="li">stray<ul><li id="nestedli">nested</li></ul></li></td></tr></table>
+                    <ul><li id="listli">in a list</li></ul>
+                </div>
+                <div id="target" style="color:red">INIT</div>
+                <script>
+                    // The output has no doctype, so natively it's in quirks mode, where
+                    // tables don't inherit font size, weight, white-space or
+                    // text-align, and a stray li's marker is inside.
+                    const cs = (el) => window.getComputedStyle(el);
+                    const td = cs(document.getElementById('td'));
+                    const results = {
+                        tdFont: td.fontFamily + ' ' + td.fontSize + ' ' + td.fontWeight,
+                        tdTextAlign: td.textAlign,
+                        preInTable: cs(document.getElementById('pre')).whiteSpace,
+                        strayLi: cs(document.getElementById('li')).listStylePosition,
+                        nestedLi: cs(document.getElementById('nestedli')).listStylePosition,
+                        listLi: cs(document.getElementById('listli')).listStylePosition,
+                    };
+                    const expected = {
+                        tdFont: 'cursive 16px 400',
+                        tdTextAlign: 'start',
+                        preInTable: 'normal',
+                        strayLi: 'inside',
+                        nestedLi: 'outside',
+                        listLi: 'outside',
                     };
                     const failures = Object.keys(expected).filter((k) => results[k] !== expected[k]);
                     document.getElementById('content').remove();
