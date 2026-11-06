@@ -867,6 +867,20 @@
       }
     }
 
+    // Whether Chrome is applying its view-source.css UA stylesheet to the
+    // document, which sets `table { border-spacing: 0 }` (html.css has 2px).
+    // The probe table is in a shadow tree, so the page's styles don't reach it.
+    function usesViewSourceStyles(container) {
+      const xmlns = 'http://www.w3.org/1999/xhtml';
+      const host = callOn(document, 'createElementNS', xmlns, 'div');
+      const table = callOn(document, 'createElementNS', xmlns, 'table');
+      host.attachShadow({ mode: 'closed' }).append(table);
+      callOn(container, 'append', host);
+      const result = parseFloat(getComputedStyle(table).borderSpacing) === 0;
+      host.remove();
+      return result;
+    }
+
     function unsafeReplaceDocumentWithHtml(targetElement, htmlString, mimeType) {
       if (mimeType === 'text/plain') {
         const escaped = htmlString.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -921,88 +935,42 @@
           }
         }
       }
-      if (targetElement instanceof HTMLHtmlElement) {
-        // The browser's native XML viewer injects a hidden User Agent stylesheet that applies
-        // rules like `white-space: nowrap` and monospace fonts. Since we are reusing the same
-        // Document, these rules persist and break the layout of the newly rendered HTML.
-        // We inject a reset stylesheet at the very top of the <head> to override these UA styles,
-        // allowing the author's own CSS to take precedence naturally.
+      if (targetElement instanceof HTMLHtmlElement && usesViewSourceStyles(targetElement)) {
+        // Chrome's XML viewer (which runs when the XML source has no XHTML, SVG,
+        // or MathML elements) marks the document as view-source, so Chrome keeps
+        // applying its view-source.css UA stylesheet to the transformed output.
+        // Undo those rules with html.css's values. These rules have zero
+        // specificity, so author rules still win, but they'd also beat
+        // presentational attributes, hence the `:not([...])` guards.
         const resetStyles = callOn(document, 'createElementNS', 'http://www.w3.org/1999/xhtml', 'style');
-        let supportsWhere = false;
-        try {
-          supportsWhere = CSS.supports('selector(:where(table:not([width])))');
-        } catch {}
-        if (supportsWhere) {
-          resetStyles.textContent = `
-            :where(html, body) {
-              white-space: normal;
-              font-family: initial;
-              font-size: initial;
-            }
-            :where(body) {
-              margin: 8px;
-            }
-            :where(table) {
-              min-width: auto;
-              white-space: normal;
-              font-size: initial;
-              font-family: initial;
-              tab-size: initial;
-            }
-            :where(table:not([width])) {
-              width: auto;
-            }
-            :where(table:not([cellspacing])) {
-              border-spacing: 2px;
-            }
-            :where(table:not([align])) {
-              margin: initial;
-            }
-            :where(td) {
-              vertical-align: initial;
-            }
-            :where(tbody, thead, tfoot, tr, th) {
-              white-space: normal;
-            }
-            :where(li) {
-              list-style-position: inside;
-            }
-            :where(ul, ol, menu) :where(li) {
-              list-style-position: unset;
-            }`;
-        } else {
-          resetStyles.textContent = `
-            html, body {
-              white-space: normal;
-              font-family: initial;
-              font-size: initial;
-            }
-            body {
-              margin: 8px;
-            }
-            table {
-              width: auto;
-              min-width: auto;
-              border-spacing: 2px;
-              white-space: normal;
-              margin: initial;
-              font-size: initial;
-              font-family: initial;
-              tab-size: initial;
-            }
-            td {
-              vertical-align: initial;
-            }
-            tbody, thead, tfoot, tr, th {
-              white-space: normal;
-            }
-            li {
-              list-style-position: inside;
-            }
-            ul li, ol li, menu li {
-              list-style-position: unset;
-            }`;
-        }
+        resetStyles.textContent = `
+          :where(body:not([marginwidth], [leftmargin])) {
+            margin-left: 8px;
+            margin-right: 8px;
+          }
+          :where(body:not([marginheight], [topmargin])) {
+            margin-top: 8px;
+            margin-bottom: 8px;
+          }
+          :where(table) {
+            min-width: auto;
+            white-space: inherit;
+            font-size: inherit;
+            font-family: inherit;
+            tab-size: inherit;
+          }
+          :where(table:not([width])) {
+            width: auto;
+          }
+          :where(table:not([cellspacing])) {
+            border-spacing: 2px;
+          }
+          :where(table:not([align])) {
+            margin: initial;
+          }
+          :where(td:not([valign])) {
+            vertical-align: inherit;
+          }`;
         const head = callOn(targetElement, 'querySelector', 'head');
         callOn(head || targetElement, 'prepend', resetStyles);
       }
