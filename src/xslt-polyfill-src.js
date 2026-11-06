@@ -849,8 +849,19 @@
           // Like Firefox, skip alternate stylesheets.
           const alternateMatch = piData.match(/alternate\s*=\s*(["'])(.*?)\1/)?.[2];
           if (hrefMatch && xsltPITypes.includes(typeMatch) && alternateMatch !== 'yes') {
-            // Decode HTML entities from the path.
+            // Decode character references (e.g. "&#038;" in SmartCrawl sitemaps)
+            // and predefined entities in the path, like Chrome and Firefox do.
+            // "&amp;" goes last, so "&amp;#38;" stays "&#38;".
+            const decodeCharRef = (ref, codePoint) => {
+              try {
+                return String.fromCodePoint(codePoint);
+              } catch {
+                return ref; // Out of range.
+              }
+            };
             return hrefMatch
+              .replace(/&#x([0-9a-fA-F]+);/g, (ref, hex) => decodeCharRef(ref, parseInt(hex, 16)))
+              .replace(/&#([0-9]+);/g, (ref, dec) => decodeCharRef(ref, parseInt(dec, 10)))
               .replace(/&lt;/g, '<')
               .replace(/&gt;/g, '>')
               .replace(/&quot;/g, '"')

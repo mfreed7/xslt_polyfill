@@ -2150,6 +2150,25 @@ const testCases = [
         </xsl:stylesheet>`,
   },
   {
+    name: 'xml-stylesheet href with character references',
+    extraFiles: {
+      'xml_stylesheet_href_with_character_references.xsl': `<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+        <xsl:output method="html"/>
+        <xsl:template match="/">
+            <div id="target" style="color:green">PASS</div>
+        </xsl:template>
+      </xsl:stylesheet>`,
+    },
+    // Browsers decode character references in the href pseudo-attribute
+    // (&#99; is "c" and &#x72; is "r"), like SmartCrawl sitemaps' "&#038;".
+    xml: `<?xml version="1.0"?>
+        <?xml-stylesheet type="text/xsl" href="./xml_stylesheet_href_with_&#99;haracter_&#x72;eferences.xsl"?>
+        <page>
+            {{SCRIPT_INJECTION_LOCATION}}
+            <message>INIT</message>
+        </page>`,
+  },
+  {
     name: 'xml-stylesheet with alternate=yes is skipped',
     extraFiles: {
       'xml_stylesheet_with_alternate_yes_is_skipped_alt.xsl': `<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
