@@ -789,6 +789,38 @@ const testCases = [
     </xsl:stylesheet>`,
   },
   {
+    name: 'Load and DOMContentLoaded Events with page-replaced Event',
+    xml: `<?xml version="1.0" encoding="UTF-8"?>
+        <?xml-stylesheet type="text/xsl" href="{{XSL_HREF}}"?>
+        <document>
+            {{SCRIPT_INJECTION_LOCATION}}
+            INIT
+        </document>`,
+    xsl: `<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+        <xsl:output method="html"/>
+        <xsl:template match="/">
+            <body>
+                <div id="target" style="color:red">INIT</div>
+                <script>
+                    // Libraries like MooTools 1.2 replace the global Event.
+                    var Event = function (e) { this.type = e.type; };
+                    const events = {};
+                    const check = (e) => {
+                        events[e.type] = true;
+                        if (events['load'] &amp;&amp; events['DOMContentLoaded']) {
+                            const div = document.getElementById('target');
+                            div.style.color = 'green';
+                            div.textContent = 'PASS';
+                        }
+                    };
+                    window.addEventListener('load', check);
+                    document.addEventListener('DOMContentLoaded', check);
+                </script>
+            </body>
+        </xsl:template>
+    </xsl:stylesheet>`,
+  },
+  {
     name: 'Synchronized External Script Loading',
     xml: `<?xml version="1.0" encoding="UTF-8"?>
         <?xml-stylesheet type="text/xsl" href="{{XSL_HREF}}"?>

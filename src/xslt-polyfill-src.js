@@ -58,6 +58,11 @@
   const setOn = (node, name, value) => Reflect.apply(findMember(node, name).set, node, [value]);
   const templateContentOf = bindCall(Object.getOwnPropertyDescriptor(HTMLTemplateElement.prototype, 'content').get);
   const originalInnerHTML = Object.getOwnPropertyDescriptor(Element.prototype, 'innerHTML');
+  // Scripts in the transformed output run before the polyfill dispatches its
+  // synthetic `DOMContentLoaded` and `load` events, and can replace the global
+  // `Event` (MooTools 1.2 does, with `var Event = ...`), so capture it here.
+  const OriginalEvent = Event;
+  const dispatchEventOn = bindCall(EventTarget.prototype.dispatchEvent);
 
   // True if `window[name]` is set by the page. Named elements (`<img name>`,
   // `<iframe name>`, `<div id>`, etc.) also make `name in window` true, but they
@@ -1018,8 +1023,8 @@
             await promise;
           }
         }
-        callOn(document, 'dispatchEvent', new Event('DOMContentLoaded', { bubbles: true, cancelable: true }));
-        window.dispatchEvent(new Event('load', { bubbles: false, cancelable: false }));
+        dispatchEventOn(document, new OriginalEvent('DOMContentLoaded', { bubbles: true, cancelable: true }));
+        dispatchEventOn(window, new OriginalEvent('load', { bubbles: false, cancelable: false }));
       })();
     }
 
