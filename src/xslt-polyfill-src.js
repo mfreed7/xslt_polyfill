@@ -236,6 +236,9 @@
     let wasm_transform_async = null;
     let wasm_free = null;
     let wasmLoadStarted = false;
+    // Imported stylesheets preprocessed by compileImports(), keyed by URL. Used
+    // by fetch_and_load_document (in transform.c) instead of fetching them.
+    const preprocessedStylesheets = new Map();
 
     function initializeWasmModule(Module) {
       if (WasmModule) {
@@ -262,8 +265,9 @@
       }
       wasmLoadStarted = true;
       // Emscripten builds the module on the object passed to the factory.
-      // fetch_and_load_document (in transform.c) uses decodeXmlBytes from it.
-      const moduleArg = { decodeXmlBytes };
+      // fetch_and_load_document (in transform.c) uses decodeXmlBytes and
+      // preprocessedStylesheets from it.
+      const moduleArg = { decodeXmlBytes, preprocessedStylesheets };
       createXSLTTransformModule(moduleArg)
         .then(initializeWasmModule)
         .catch((err) => {
@@ -348,50 +352,17 @@
       return doc;
     }
 
-    function isDuplicateParam(nodeToImport, existingParamNames, existingVariableNames) {
-      if (nodeToImport.localName !== 'param' || nodeToImport.namespaceURI !== 'http://www.w3.org/1999/XSL/Transform') {
-        return false;
-      }
-      const name = nodeToImport.getAttribute('name');
-      return existingParamNames.has(name) || (existingVariableNames && existingVariableNames.has(name));
-    }
-
-    function isDuplicateVariable(nodeToImport, existingParamNames, existingVariableNames) {
-      if (nodeToImport.localName !== 'variable' || nodeToImport.namespaceURI !== 'http://www.w3.org/1999/XSL/Transform') {
-        return false;
-      }
-      const name = nodeToImport.getAttribute('name');
-      return existingVariableNames.has(name) || (existingParamNames && existingParamNames.has(name));
-    }
-
-    function getTopLevelParamNames(xsltsheet, xslns) {
-      const params = xsltsheet.documentElement.getElementsByTagNameNS(xslns, 'param');
-      const names = new Set();
-      for (const param of params) {
-        if (param.parentElement === xsltsheet.documentElement) {
-          names.add(param.getAttribute('name'));
-        }
-      }
-      return names;
-    }
-
-    function getTopLevelVariableNames(xsltsheet, xslns) {
-      const vars = xsltsheet.documentElement.getElementsByTagNameNS(xslns, 'variable');
-      const names = new Set();
-      for (const v of vars) {
-        if (v.parentElement === xsltsheet.documentElement) {
-          names.add(v.getAttribute('name'));
-        }
-      }
-      return names;
-    }
-
-    // Recursively fetches and inlines <xsl:import> statements within an XSLT document.
-    // This function is destructive and will modify the provided `xsltsheet` document.
-    // The `xsltsheet` parameter is the XSLT document to process, and `relurl` is the
-    // base URL for resolving relative import paths.
-    // Returns the modified XSLT document with all imports inlined.
-    async function compileImports(xsltsheet, relurl) {
+    // Recursively preprocesses the <xsl:import>s within an XSLT document, so that
+    // libxslt can then load them itself (via fetch_and_load_document in
+    // transform.c), which preserves import precedence. Imports that can't be
+    // loaded or parsed are removed, rather than failing the transformation, and
+    // the root element attributes of each imported stylesheet are merged into
+    // the importing one. Each preprocessed imported stylesheet is stored in
+    // `preprocessed` (a Map from URL to serialized stylesheet), for
+    // fetch_and_load_document to use instead of fetching it again. This function
+    // is destructive and will modify the provided `xsltsheet` document. `relurl`
+    // is the base URL for resolving relative import paths.
+    async function compileImports(xsltsheet, relurl, preprocessed) {
       const xslns = 'http://www.w3.org/1999/XSL/Transform';
       const imports = Array.from(xsltsheet.getElementsByTagNameNS(xslns, 'import'));
       if (!imports.length) {
@@ -400,9 +371,6 @@
       if (!relurl) {
         relurl = window.location.href;
       }
-
-      const existingParamNames = getTopLevelParamNames(xsltsheet, xslns);
-      const existingVariableNames = getTopLevelVariableNames(xsltsheet, xslns);
 
       // Fetch all imports at this level in parallel.
       const importDocs = await Promise.all(
@@ -433,36 +401,13 @@
           }
         }
 
-        // Recursively compile imports within the imported document.
-        await compileImports(importedDoc, href);
-
-        // Move all children from the imported document to the main document.
-        // Special case: skip duplicate parameters and variables if they were already merged.
-        let child = importedDocRoot.firstChild;
-        while (child) {
-          const next = child.nextSibling;
-          if (
-            isDuplicateParam(child, existingParamNames, existingVariableNames) ||
-            isDuplicateVariable(child, existingParamNames, existingVariableNames)
-          ) {
-            child.remove();
-          } else {
-            if (child.namespaceURI === xslns) {
-              if (child.localName === 'param') {
-                existingParamNames.add(child.getAttribute('name'));
-              } else if (child.localName === 'variable') {
-                existingVariableNames.add(child.getAttribute('name'));
-              }
-            }
-            importElement.before(child);
-          }
-          child = next;
-        }
-        importElement.remove();
+        // Recursively preprocess imports within the imported document.
+        await compileImports(importedDoc, href, preprocessed);
+        importElement.setAttribute('href', href);
+        preprocessed.set(href, new XMLSerializer().serializeToString(importedDoc));
       }
       return xsltsheet;
     }
-
     const textEncoder = new TextEncoder();
     const textDecoder = new TextDecoder();
 
@@ -905,23 +850,34 @@
         return showError(`Failed to fetch XSLT file: ${xsltUrl.href}`);
       }
 
-      // Compile imports. This inlines them into the stylesheet document.
-      const compiledXsltDoc = await compileImports(xsltDoc, xsltUrl.href);
-      const compiledXsltText = new XMLSerializer().serializeToString(compiledXsltDoc);
+      // Preprocess imports. libxslt then loads them itself (see compileImports).
+      const preprocessed = new Map();
+      await compileImports(xsltDoc, xsltUrl.href, preprocessed);
+      const xsltText = new XMLSerializer().serializeToString(xsltDoc);
 
       // Process XML/XSLT and replace the document.
       try {
         await xsltPolyfillReady();
-        const { content, mimeType } = await transformXmlWithXslt(
-          xmlBytes,
-          compiledXsltText,
-          null,
-          xsltUrl.href,
-          /*allowAsync*/ true,
-          /*buildPlainText*/ true,
-        );
+        for (const [url, text] of preprocessed) {
+          preprocessedStylesheets.set(url, text);
+        }
+        let result;
+        try {
+          result = await transformXmlWithXslt(
+            xmlBytes,
+            xsltText,
+            null,
+            xsltUrl.href,
+            /*allowAsync*/ true,
+            /*buildPlainText*/ true,
+          );
+        } finally {
+          for (const url of preprocessed.keys()) {
+            preprocessedStylesheets.delete(url);
+          }
+        }
         // Replace the document with the result
-        replaceDoc(content, mimeType);
+        replaceDoc(result.content, result.mimeType);
       } catch (e) {
         return showError(`Error processing XML/XSLT: ${e}`);
       }

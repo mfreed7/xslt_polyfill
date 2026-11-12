@@ -25,7 +25,7 @@
 #include <libxslt/xsltutils.h>
 
 // Forward declaration for our JS fetch function.
-const char *fetch_and_load_document(const char *url);
+const char *fetch_and_load_document(const char *url, int is_stylesheet);
 
 // Logs a message to the console at the given xmlErrorLevel, prefixed with
 // "file:line: " if a file is given.
@@ -79,9 +79,13 @@ static void buffer_generic_error(void *ctx, const char *msg, ...) {
 // Use EM_JS to define a JavaScript function that can be called from C.
 // This function will use the fetch API to get a document from a URL.
 // It uses Asyncify to pause the C code and wait for the async JS to complete.
-EM_JS(const char *, fetch_and_load_document, (const char *url), {
+// For stylesheet loads (xsl:import/xsl:include), a stylesheet that was already
+// fetched and preprocessed by compileImports (in xslt-polyfill-src.js) is used
+// instead of fetching it again.
+EM_JS(const char *, fetch_and_load_document, (const char *url, int is_stylesheet), {
   return Asyncify.handleSleep(function(wakeUp) {
     var urlStr = UTF8ToString(url);
+    var preprocessed = null;
     Promise.resolve()
         .then(function() {
           var resolved = new URL(urlStr, window.location.href);
@@ -96,9 +100,17 @@ EM_JS(const char *, fetch_and_load_document, (const char *url), {
           } else if (resolved.origin !== window.location.origin) {
             throw new Error('Cross-origin URLs are not allowed');
           }
+          var stylesheets = Module['preprocessedStylesheets'];
+          if (is_stylesheet && stylesheets && stylesheets.has(resolved.href)) {
+            preprocessed = stylesheets.get(resolved.href);
+            return null;
+          }
           return fetch(resolved.href, {mode : 'same-origin'});
         })
         .then(function(response) {
+          if (preprocessed !== null) {
+            return preprocessed;
+          }
           if (!response.ok) {
             return null;
           }
@@ -482,7 +494,8 @@ static xmlDocPtr docLoader(const xmlChar *URI, xmlDictPtr dict, int options,
   }
 
   printf("Loading external document from URL %s...\n", url);
-  const char *content = fetch_and_load_document(url);
+  const char *content =
+      fetch_and_load_document(url, type == XSLT_LOAD_STYLESHEET);
   printf("Done loading %s.\n", url);
 
   if (content == NULL) {

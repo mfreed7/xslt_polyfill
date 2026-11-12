@@ -1803,6 +1803,72 @@ const testCases = [
     </xsl:stylesheet>`,
   },
   {
+    // Templates in the importing stylesheet have higher import precedence
+    // than same-named/same-pattern templates in an imported stylesheet, so
+    // overriding them is legal.
+    name: 'Imported templates overridden by importing stylesheet',
+    extraFiles: {
+      'Imported_templates_overridden_by_importing_stylesheet_imported.xsl': `<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+          <xsl:template name="overridden">FAIL_IMPORTED_NAMED</xsl:template>
+          <xsl:template match="message">FAIL_IMPORTED_MATCH</xsl:template>
+          <xsl:template match="message" mode="base">BASE</xsl:template>
+        </xsl:stylesheet>`,
+    },
+    xml: `<?xml version="1.0" encoding="UTF-8"?>
+        <?xml-stylesheet type="text/xsl" href="{{XSL_HREF}}"?>
+        <document>
+            {{SCRIPT_INJECTION_LOCATION}}
+            <message>INIT</message>
+        </document>`,
+    xsl: `<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+        <xsl:import href="./Imported_templates_overridden_by_importing_stylesheet_imported.xsl"/>
+        <xsl:output method="html"/>
+        <xsl:template name="overridden">NAMED</xsl:template>
+        <xsl:template match="message">MATCH</xsl:template>
+        <xsl:template match="/">
+            <body>
+                <div id="target" style="color:red">INIT</div>
+                <script>
+                    const result = "<xsl:call-template name="overridden"/>,<xsl:apply-templates select="document/message"/>,<xsl:apply-templates select="document/message" mode="base"/>";
+                    const target = document.getElementById("target");
+                    if (result === "NAMED,MATCH,BASE") {
+                        target.style.color = "green";
+                        target.textContent = "PASS";
+                    } else {
+                        target.textContent = "FAIL: got " + result;
+                    }
+                </script>
+            </body>
+        </xsl:template>
+    </xsl:stylesheet>`,
+  },
+  {
+    name: 'Nested imports that fail to load are skipped',
+    extraFiles: {
+      'Nested_imports_that_fail_to_load_are_skipped_imported.xsl': `<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+          <xsl:import href="./Nested_imports_that_fail_to_load_are_skipped_broken.xsl"/>
+          <xsl:import href="./Nested_imports_that_fail_to_load_are_skipped_missing.xsl"/>
+          <xsl:template name="nested">PASS</xsl:template>
+        </xsl:stylesheet>`,
+      'Nested_imports_that_fail_to_load_are_skipped_broken.xsl': `<broken-xml-not-closed>`,
+    },
+    xml: `<?xml version="1.0" encoding="UTF-8"?>
+        <?xml-stylesheet type="text/xsl" href="{{XSL_HREF}}"?>
+        <document>
+            {{SCRIPT_INJECTION_LOCATION}}
+            INIT
+        </document>`,
+    xsl: `<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+        <xsl:import href="./Nested_imports_that_fail_to_load_are_skipped_imported.xsl"/>
+        <xsl:output method="html"/>
+        <xsl:template match="/">
+            <body>
+                <div id="target" style="color:green"><xsl:call-template name="nested"/></div>
+            </body>
+        </xsl:template>
+    </xsl:stylesheet>`,
+  },
+  {
     name: 'showError handles unescaped characters in message',
     xml: `<?xml version="1.0" encoding="UTF-8"?>
         <?xml-stylesheet type="text/xsl" href="{{XSL_HREF}}"?>
