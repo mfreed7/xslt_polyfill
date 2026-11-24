@@ -96,7 +96,7 @@
     return embedderOptions ? name in embedderOptions : hasWindowOption(name);
   }
   window.xsltPolyfillInstalled = true;
-  const xsltPolyfillVersion = '1.0.37';
+  const xsltPolyfillVersion = '1.0.38';
   window.xsltPolyfillVersion = xsltPolyfillVersion;
   let polyfillReadyPromiseResolve;
   let polyfillReadyPromiseReject;
