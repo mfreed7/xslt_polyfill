@@ -1270,6 +1270,253 @@
           }
         };
       }
+
+      // In an HTML document, CSS type/attribute-name selectors, getElementsByTagName,
+      // and HTML element attribute methods are ASCII case-insensitive, whereas in an
+      // XML document they are case-sensitive. Emulate HTML case-insensitivity for
+      // nodes belonging to the polyfilled document (and its template contents).
+      const XHTML_NS = 'http://www.w3.org/1999/xhtml';
+      const asciiLower = (s) => s.replace(/[A-Z]/g, (c) => String.fromCharCode(c.charCodeAt(0) + 32));
+      const asciiLowerIdent = (s) =>
+        s.replace(/\\.|[A-Z]/g, (m) => (m[0] === '\\' ? m : String.fromCharCode(m.charCodeAt(0) + 32)));
+      let _templateOwnerDoc;
+      function isPolyfilledNode(node) {
+        if (!(node instanceof Node)) return false;
+        if (node === _polyfilledDocument) return true;
+        const doc = getOn(node, 'ownerDocument');
+        if (doc === _polyfilledDocument) return true;
+        if (!doc) return false;
+        if (_templateOwnerDoc === undefined) {
+          _templateOwnerDoc = templateContentOf(
+            _originalCreateElementNS.call(_polyfilledDocument, XHTML_NS, 'template'),
+          ).ownerDocument;
+        }
+        return doc === _templateOwnerDoc;
+      }
+      function cacheOriginalMember(proto, name) {
+        const nodeType = proto === Element.prototype ? 1 : proto === Document.prototype ? 9 : 11;
+        const key = `${nodeType}:${name}`;
+        if (!memberCache.has(key)) {
+          const desc = Object.getOwnPropertyDescriptor(proto, name);
+          if (desc) memberCache.set(key, desc);
+        }
+      }
+
+      const IDENT_RE = /(?:\\(?:[0-9a-fA-F]{1,6}[ \t\n\r\f]?|.)|[\w-\u0080-\uffff])+/y;
+      const STR_RE = /"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'/y;
+      const ATTR_NAME_RE = /^\[(?:\s|\/\*[\s\S]*?\*\/)*(\*?\|)?((?:\\(?:[0-9a-fA-F]{1,6}[ \t\n\r\f]?|.)|[\w-\u0080-\uffff])+)/;
+      const SELECTOR_PSEUDOS = /^(?:is|where|not|has|matches|-webkit-any|-moz-any|host|host-context)$/;
+      const NTH_OF_RE = /^(?:\/\*[\s\S]*?\*\/|[0-9+\-\s]|odd|even|n)*?\bof\b/i;
+      const matchAt = (re, s, i) => ((re.lastIndex = i), re.exec(s)?.[0] || '');
+      function scanBalanced(s, i, closeChar) {
+        const openChar = s[i];
+        let depth = 0;
+        while (i < s.length) {
+          const ch = s[i];
+          if (ch === '"' || ch === "'") i += matchAt(STR_RE, s, i).length || 1;
+          else if (ch === '/' && s[i + 1] === '*') {
+            const end = s.indexOf('*/', i + 2);
+            i = end === -1 ? s.length : end + 2;
+          } else if (ch === '\\') i += 2;
+          else if (ch === openChar) { depth++; i++; }
+          else if (ch === closeChar) { if (--depth === 0) return i; i++; }
+          else i++;
+        }
+        return s.length;
+      }
+      function rewriteSelector(s) {
+        let out = '';
+        let i = 0;
+        let expectType = true;
+        while (i < s.length) {
+          const ch = s[i];
+          if (ch === '/' && s[i + 1] === '*') {
+            const end = s.indexOf('*/', i + 2);
+            const next = end === -1 ? s.length : end + 2;
+            out += s.slice(i, next);
+            i = next;
+          } else if (/\s/.test(ch) || ',>+~'.includes(ch)) {
+            out += ch;
+            i++;
+            expectType = true;
+          } else if (ch === '.' || ch === '#') {
+            const id = matchAt(IDENT_RE, s, i + 1);
+            out += ch + id;
+            i += 1 + id.length;
+            expectType = false;
+          } else if (ch === '[') {
+            const close = scanBalanced(s, i, ']');
+            const end = close < s.length ? close + 1 : close;
+            const raw = s.slice(i, end);
+            const m = ATTR_NAME_RE.exec(raw);
+            const isNamedNs = m && !m[1] && raw[m[0].length] === '|' && raw[m[0].length + 1] !== '=';
+            if (m && !isNamedNs) {
+              const lower = asciiLowerIdent(m[2]);
+              if (lower !== m[2]) {
+                const nameStart = m[0].length - m[2].length;
+                out += `:is(${raw}, ${raw.slice(0, nameStart) + lower + raw.slice(m[0].length)})`;
+              } else {
+                out += raw;
+              }
+            } else {
+              out += raw;
+            }
+            i = end;
+            expectType = false;
+          } else if (ch === ':') {
+            const prefixLen = s[i + 1] === ':' ? 2 : 1;
+            const name = matchAt(IDENT_RE, s, i + prefixLen);
+            const afterName = i + prefixLen + name.length;
+            if (s[afterName] === '(') {
+              const close = scanBalanced(s, afterName, ')');
+              let inner = s.slice(afterName + 1, close);
+              const fn = name.toLowerCase();
+              if (prefixLen === 2 ? fn === 'slotted' : SELECTOR_PSEUDOS.test(fn)) {
+                inner = rewriteSelector(inner);
+              } else if (prefixLen === 1 && (fn === 'nth-child' || fn === 'nth-last-child')) {
+                const ofMatch = NTH_OF_RE.exec(inner);
+                if (ofMatch) {
+                  inner = inner.slice(0, ofMatch[0].length) + rewriteSelector(inner.slice(ofMatch[0].length));
+                }
+              }
+              out += s.slice(i, afterName + 1) + inner + (close < s.length ? ')' : '');
+              i = close + 1;
+            } else {
+              out += s.slice(i, afterName);
+              i = afterName;
+            }
+            expectType = false;
+          } else if (expectType) {
+            if (ch === '|') {
+              const rest = s[i + 1] === '*' ? '*' : matchAt(IDENT_RE, s, i + 1);
+              out += '|' + rest;
+              i += 1 + rest.length;
+            } else if (ch === '*') {
+              if (s[i + 1] === '|') {
+                const tag = matchAt(IDENT_RE, s, i + 2);
+                if (tag) {
+                  const lower = asciiLowerIdent(tag);
+                  out += lower !== tag ? `:is(*|${tag}, *|${lower})` : `*|${tag}`;
+                  i += 2 + tag.length;
+                } else {
+                  const star = s[i + 2] === '*' ? '*' : '';
+                  out += '*|' + star;
+                  i += 2 + star.length;
+                }
+              } else {
+                out += '*';
+                i++;
+              }
+            } else {
+              const tag = matchAt(IDENT_RE, s, i);
+              if (tag) {
+                const lower = asciiLowerIdent(tag);
+                out += lower !== tag ? `:is(${tag}, ${lower})` : tag;
+                i += tag.length;
+              } else {
+                out += ch;
+                i++;
+              }
+            }
+            expectType = false;
+          } else {
+            out += ch;
+            i++;
+          }
+        }
+        return out;
+      }
+
+      const originalMatches = Element.prototype.matches;
+      let _selectorProbe;
+      function normalizeHtmlSelector(selector) {
+        const str = String(selector);
+        if (!/[A-Z]/.test(str)) return str;
+        // Validate syntax before introducing forgiving :is() wrappers.
+        if (!_selectorProbe) {
+          _selectorProbe = _originalCreateElementNS.call(_polyfilledDocument, XHTML_NS, 'div');
+        }
+        originalMatches.call(_selectorProbe, str);
+        return rewriteSelector(str);
+      }
+      function patchSelectorMethod(proto, name) {
+        const orig = proto[name];
+        if (!orig) return;
+        cacheOriginalMember(proto, name);
+        proto[name] = function (selector) {
+          if (arguments.length > 0 && isPolyfilledNode(this)) {
+            return orig.call(this, normalizeHtmlSelector(selector));
+          }
+          return orig.apply(this, arguments);
+        };
+      }
+      for (const proto of [Document.prototype, Element.prototype, DocumentFragment.prototype]) {
+        patchSelectorMethod(proto, 'querySelector');
+        patchSelectorMethod(proto, 'querySelectorAll');
+      }
+      for (const name of ['matches', 'webkitMatchesSelector', 'closest']) {
+        patchSelectorMethod(Element.prototype, name);
+      }
+
+      const htmlTagCache = new Map();
+      function isKnownHtmlTag(lower) {
+        if (lower.includes('-')) return false;
+        let known = htmlTagCache.get(lower);
+        if (known === undefined) {
+          try {
+            known = !(_originalCreateElementNS.call(_polyfilledDocument, XHTML_NS, lower) instanceof HTMLUnknownElement);
+          } catch {
+            known = false;
+          }
+          htmlTagCache.set(lower, known);
+        }
+        return known;
+      }
+      for (const proto of [Document.prototype, Element.prototype]) {
+        const orig = proto.getElementsByTagName;
+        if (!orig) continue;
+        cacheOriginalMember(proto, 'getElementsByTagName');
+        proto.getElementsByTagName = function (qualifiedName) {
+          if (arguments.length > 0 && isPolyfilledNode(this)) {
+            const name = String(qualifiedName);
+            if (/[A-Z]/.test(name)) {
+              const lower = asciiLower(name);
+              if (isKnownHtmlTag(lower)) return orig.call(this, lower);
+              const exact = orig.call(this, name);
+              if (exact.length === 0) {
+                const lowered = orig.call(this, lower);
+                if (lowered.length > 0) return lowered;
+              }
+              return exact;
+            }
+          }
+          return orig.apply(this, arguments);
+        };
+      }
+
+      for (const name of [
+        'getAttribute',
+        'hasAttribute',
+        'removeAttribute',
+        'setAttribute',
+        'toggleAttribute',
+        'getAttributeNode',
+      ]) {
+        const orig = Element.prototype[name];
+        if (!orig) continue;
+        cacheOriginalMember(Element.prototype, name);
+        Element.prototype[name] = function (attrName) {
+          if (arguments.length > 0 && isPolyfilledNode(this) && getOn(this, 'namespaceURI') === XHTML_NS) {
+            const str = String(attrName);
+            if (/[A-Z]/.test(str)) {
+              const args = Array.from(arguments);
+              args[0] = asciiLower(str);
+              return orig.apply(this, args);
+            }
+          }
+          return orig.apply(this, arguments);
+        };
+      }
     }
     function parseAndReplaceCurrentXMLDoc(doc) {
       if (!findXsltPathInProlog(doc)) {

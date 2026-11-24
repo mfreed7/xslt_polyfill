@@ -2825,6 +2825,107 @@ const testCases = [
         };
         </script>`,
   },
+  {
+    name: 'HTML case-insensitive selectors, getElementsByTagName, and attributes in XML document',
+    xml: `<?xml version="1.0" encoding="UTF-8"?>
+        <?xml-stylesheet type="text/xsl" href="{{XSL_HREF}}"?>
+        <document>
+            {{SCRIPT_INJECTION_LOCATION}}
+            INIT
+        </document>`,
+    xsl: `<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+        <xsl:output method="html" doctype-system="about:legacy-compat"/>
+        <xsl:template match="/">
+            <html>
+            <body>
+                <div style="display:none">
+                <table id="Menu" class="TableSorter">
+                    <thead><tr class="HeaderRow"><th filter-type="ddl">Food</th><th lang="en-US">Drink</th></tr></thead>
+                    <tbody><tr><td>Burger</td><td>Water</td></tr></tbody>
+                </table>
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><linearGradient id="Grad"/></svg>
+                <template id="Tmpl"><div class="InTmpl"><span>Hi</span></div></template>
+                </div>
+                <div id="target" style="color:red">INIT</div>
+                <script>
+                    const fails = [];
+                    const check = (name, cond) =&gt; { if (!cond) fails.push(name); };
+                    const table = document.getElementById('Menu');
+                    const th = table.querySelector('th');
+                    const svg = document.querySelector('svg');
+                    const tmpl = document.getElementById('Tmpl');
+
+                    // 1. CSS selector methods (querySelector*, matches, closest)
+                    check('doc.qs THEAD', document.querySelector('THEAD') === table.tHead);
+                    check('el.qsa TR', table.querySelectorAll('TR').length === 2);
+                    check('TR.HeaderRow', table.querySelectorAll('TR.HeaderRow').length === 1);
+                    check('TR.headerrow case', table.querySelectorAll('TR.headerrow').length === 0);
+                    check('#Menu TH[FILTER-TYPE]', table.querySelector('#Menu TH[FILTER-TYPE="ddl"]') === th);
+                    check('#menu case', table.querySelector('#menu') === null);
+                    check('attr val case', table.querySelector('TH[FILTER-TYPE="DDL"]') === null);
+                    check(':not', table.querySelector('TH:not([FILTER-TYPE="ddl"])')?.textContent === 'Drink');
+                    check(':has', table.querySelector('THEAD:has(&gt; TR.HeaderRow)') === table.tHead);
+                    check(':nth-child of', table.querySelector('TR &gt; TH:nth-child(2N of TH)')?.textContent === 'Drink');
+                    check(':lang(en-US)', table.querySelector('TH:lang(en-US)')?.textContent === 'Drink');
+                    check('matches', th.matches('TH.Other, TH[FILTER-TYPE="ddl"]'));
+                    check('webkitMatchesSelector', th.webkitMatchesSelector('TH'));
+                    check('closest', th.closest('TABLE#Menu') === table);
+                    const frag = document.createDocumentFragment();
+                    const fragSpan = document.createElement('span');
+                    frag.appendChild(fragSpan);
+                    check('frag.qs SPAN', frag.querySelector('SPAN') === fragSpan);
+                    check('tmpl.qs SPAN', tmpl.content.querySelector('SPAN')?.textContent === 'Hi');
+                    check('svg camelCase qs', document.querySelector('linearGradient')?.id === 'Grad');
+                    let invalidThrew = false;
+                    try { document.querySelector('DIV[bad syntax]'); } catch (e) { invalidThrew = e.name === 'SyntaxError'; }
+                    check('invalid selector throws', invalidThrew);
+
+                    // 2. getElementsByTagName and HTML attribute methods
+                    check('doc.gebtn THEAD', document.getElementsByTagName('THEAD').length === 1);
+                    check('el.gebtn TR', table.getElementsByTagName('TR').length === 2);
+                    const tfoots = table.getElementsByTagName('TFOOT');
+                    const tfoot = document.createElement('tfoot');
+                    table.appendChild(tfoot);
+                    check('live gebtn TFOOT', tfoots.length === 1);
+                    tfoot.remove();
+                    check('svg camelCase gebtn', document.getElementsByTagName('linearGradient').length === 1);
+                    check('getAttribute upper', th.getAttribute('FILTER-TYPE') === 'ddl');
+                    check('hasAttribute upper', th.hasAttribute('FILTER-TYPE'));
+                    check('getAttributeNode upper', th.getAttributeNode('FILTER-TYPE')?.value === 'ddl');
+                    th.setAttribute('DATA-TEST', 'Val');
+                    check('setAttribute upper', th.getAttribute('data-test') === 'Val' &amp;&amp; th.getAttribute('DATA-TEST') === 'Val');
+                    th.toggleAttribute('DATA-FLAG');
+                    const hadFlag = th.hasAttribute('data-flag');
+                    th.toggleAttribute('DATA-FLAG');
+                    check('toggleAttribute upper', hadFlag &amp;&amp; !th.hasAttribute('data-flag'));
+                    th.removeAttribute('DATA-TEST');
+                    check('removeAttribute upper', !th.hasAttribute('data-test'));
+                    check('svg attr case', svg.getAttribute('viewBox') === '0 0 10 10' &amp;&amp; svg.getAttribute('VIEWBOX') === null);
+                    const custom = document.createElementNS(null, 'customTag');
+                    custom.setAttribute('MyAttr', '1');
+                    check('null-ns attr case', custom.getAttribute('MyAttr') === '1' &amp;&amp; custom.getAttribute('myattr') === null);
+
+                    // 3. Separate XML documents stay case-sensitive
+                    const xdoc = new DOMParser().parseFromString('&lt;Root&gt;&lt;Child MyAttr="1"/&gt;&lt;/Root&gt;', 'application/xml');
+                    const xchild = xdoc.documentElement.firstElementChild;
+                    check('xdoc qs case', xdoc.querySelector('CHILD') === null &amp;&amp; xdoc.querySelector('Child') === xchild);
+                    check('xdoc attr qs case', xdoc.querySelector('Child[MYATTR="1"]') === null &amp;&amp; xdoc.querySelector('Child[MyAttr="1"]') === xchild);
+                    check('xdoc gebtn case', xdoc.getElementsByTagName('CHILD').length === 0 &amp;&amp; xdoc.getElementsByTagName('Child').length === 1);
+                    check('xdoc getAttr case', xchild.getAttribute('myattr') === null &amp;&amp; xchild.getAttribute('MyAttr') === '1');
+
+                    const target = document.getElementById('target');
+                    if (fails.length === 0) {
+                        target.style.color = 'green';
+                        target.textContent = 'PASS';
+                    } else {
+                        target.textContent = 'FAIL: ' + fails.join(', ');
+                    }
+                </script>
+            </body>
+            </html>
+        </xsl:template>
+    </xsl:stylesheet>`,
+  },
 ];
 
 const fs = require('fs');
